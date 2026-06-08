@@ -97,42 +97,56 @@ export async function classify(input) {
   return (await viaGateway(input)) || heuristic(input);
 }
 
-/* ── Photo understanding ─────────────────────────────────────────────────────
- * Given a captured photo, suggest a title + description the neighbour can edit
- * before posting. Vision goes through the same single gateway (image option).
- * Returns null on any failure so the UI silently falls back to manual entry.
+/* ── Post composition ────────────────────────────────────────────────────────
+ * From a captured photo and/or the neighbour's short note, suggest a title + a
+ * description of 50 words or LESS that they can edit before posting. Vision and
+ * text both go through the single gateway. Returns null on any failure so the UI
+ * silently falls back to manual entry.
  */
-const DESCRIBE_SYSTEM =
-  'You help a neighbour post a civic observation about their block from a photo. ' +
-  'Look at the image and produce: a short, specific title (max 8 words, no quotation marks) ' +
-  'and a warm, plain-language description of one or two sentences, written the way a neighbour ' +
-  'would. Describe only what is visible. ' +
+const COMPOSE_SYSTEM =
+  'You help a neighbour post a civic observation about their block. ' +
+  "From the photo and/or the neighbour's note, write: a short, specific title (max 8 words, no " +
+  'quotation marks) and a warm, plain-language description of 50 words or LESS, the way a neighbour ' +
+  'would write it. Describe only what is given. ' +
   'Return ONLY JSON: {"title":string,"description":string}.';
 
-export async function describeImage({ base64, mediaType, stream = 'care', userId, lang } = {}) {
-  if (!config.has.llm() || !base64) return null;
+/** Trim a string to at most `max` words (adds an ellipsis when it had to cut). */
+function capWords(str, max) {
+  const words = String(str || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= max) return words.join(' ');
+  return words.slice(0, max).join(' ').replace(/[,;:.]+$/, '') + '…';
+}
+
+export async function composePost({ base64, mediaType, note, stream = 'care', userId, lang } = {}) {
+  if (!config.has.llm()) return null;
+  if (!base64 && !(note && note.trim())) return null; // nothing to work from
   try {
+    const streamLine = stream === 'good'
+      ? 'This is for "The Good" stream — something worth savouring.'
+      : 'This is for "Needs Care" stream — something to fix or flag.';
+    const user = note && note.trim() ? `${streamLine}\nThe neighbour wrote: "${note.trim()}"` : streamLine;
     const txt = await callLLM({
-      feature: 'describe',
+      feature: 'compose',
       userId,
       lang,
-      maxTokens: 250,
+      maxTokens: 220,
       json: true,
-      system: DESCRIBE_SYSTEM,
-      user: stream === 'good'
-        ? 'This is for "The Good" stream — something worth savouring.'
-        : 'This is for "Needs Care" stream — something to fix or flag.',
-      image: { base64, mediaType: mediaType || 'image/jpeg' },
+      system: COMPOSE_SYSTEM,
+      user,
+      image: base64 ? { base64, mediaType: mediaType || 'image/jpeg' } : undefined,
     });
     if (!txt) return null;
     const json = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
-    const title = String(json.title || '').trim().slice(0, 120);
-    const description = String(json.description || '').trim().slice(0, 500);
+    const title = capWords(String(json.title || '').replace(/^["']+|["']+$/g, ''), 10).slice(0, 120);
+    const description = capWords(String(json.description || ''), 50).slice(0, 400);
     if (!title && !description) return null;
     return { title, description };
   } catch {
     return null;
   }
 }
+
+// Back-compat alias for the photo-only capture path.
+export const describeImage = composePost;
 
 export { heuristic };

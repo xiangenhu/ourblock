@@ -3,7 +3,11 @@ import { requireAuth } from '../auth.js';
 import { classify } from '../ai.js';
 import { posts, addComment, addLoopStep, toggleReaction } from '../store/repo.js';
 import { shapePost, getViewer, distanceMeters, authorSnapshot } from '../helpers.js';
+import { sampleList } from '../samples.js';
 import events from '../xapi/events.js';
+
+// Anonymous "The Good" posts carry this guest author (no account, no stable id).
+const GUEST_AUTHOR = { id: null, name: 'A neighbour', nameCjk: null, avatar: '◎', level: null, levelTitle: 'Guest' };
 
 const router = express.Router();
 
@@ -70,6 +74,11 @@ router.get('/pins', async (req, res) => {
   res.json({ pins, viewer: viewer ? { lat: viewer.lat, lng: viewer.lng } : null });
 });
 
+/** Public showcase posts for the anonymous landing page (hardcoded, not persisted). */
+router.get('/samples', (_req, res) => {
+  res.json({ samples: sampleList() });
+});
+
 router.get('/:id', async (req, res) => {
   const viewer = await getViewer(req);
   const post = await posts.getById(req.params.id);
@@ -81,18 +90,33 @@ router.get('/:id', async (req, res) => {
   res.json({ post: shapePost(post, viewer), comments });
 });
 
-/** Create an observation. AI routes it to the lowest viable rung of action. */
-router.post('/', requireAuth, async (req, res) => {
+/**
+ * Create an observation. AI routes it to the lowest viable rung of action.
+ *
+ * Auth rule: "Needs Care" requires a signed-in neighbour. "The Good" may be posted
+ * anonymously (a guest sharing a good thing), but only with a real location attached.
+ */
+router.post('/', async (req, res) => {
   const { stream, title, body, mediaType, mediaUrl, durationS, lat, lng, placeName } = req.body || {};
   if (!['good', 'care'].includes(stream))
     return res.status(400).json({ error: 'Pick a stream: good or care.' });
   if (!title || !title.trim()) return res.status(400).json({ error: 'Add a short title.' });
+  // Every observation is anchored to a place — location must be turned on.
+  if (lat == null || lng == null)
+    return res.status(400).json({ error: 'Turn on location to post to the block.' });
 
   const viewer = await getViewer(req);
+  // "Needs Care" requires a signed-in neighbour; "The Good" may be posted anonymously.
+  if (!viewer && stream !== 'good')
+    return res.status(401).json({ error: 'Sign in to flag something that needs care.' });
+  // A photo is required as evidence for every observation.
+  if (!mediaUrl)
+    return res.status(400).json({ error: 'Add a photo as evidence before posting.' });
+
   const ai = await classify({ stream, title, body, userId: req.userId });
 
   const post = await posts.create({
-    userId: req.userId,
+    userId: req.userId || null,
     stream,
     title: title.trim(),
     body: body || '',
@@ -110,7 +134,7 @@ router.post('/', requireAuth, async (req, res) => {
       summary: ai.summary,
     },
     status: 'open',
-    author: authorSnapshot(viewer),
+    author: viewer ? authorSnapshot(viewer) : { ...GUEST_AUTHOR },
   });
 
   // For care items routed to the city, seed the first loop step automatically.
@@ -122,7 +146,7 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   const fresh = await posts.getById(post.id);
-  events.postCreated(viewer, fresh);
+  if (viewer) events.postCreated(viewer, fresh); // xAPI is actor-scoped; skip for guests
   res.status(201).json({ post: shapePost(fresh, viewer) });
 });
 

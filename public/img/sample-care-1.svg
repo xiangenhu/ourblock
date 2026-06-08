@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" width="640" height="420" role="img" aria-label="A streetlight out at a dark crossing">
+  <defs>
+    <linearGradient id="c1sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C3A44"/><stop offset="1" stop-color="#46545A"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="420" fill="url(#c1sky)"/>
+  <circle cx="540" cy="80" r="34" fill="#E9E3CF" opacity=".5"/>
+  <!-- road -->
+  <rect y="300" width="640" height="120" fill="#33414A"/>
+  <g stroke="#6E7A80" stroke-width="6" stroke-dasharray="26 22"><path d="M0 360 H640"/></g>
+  <!-- lamp post (dark) -->
+  <g>
+    <rect x="300" y="120" width="14" height="200" rx="4" fill="#1E282E"/>
+    <path d="M307 130 q60 -6 64 40" fill="none" stroke="#1E282E" stroke-width="12" stroke-linecap="round"/>
+    <ellipse cx="372" cy="176" rx="20" ry="14" fill="#2A363C" stroke="#46545A" stroke-width="3"/>
+    <!-- off indicator -->
+    <circle cx="372" cy="176" r="6" fill="#46545A"/>
+  </g>
+  <!-- caution triangle -->
+  <g transform="translate(120,210)">
+    <path d="M0 70 L40 0 L80 70 Z" fill="#C0613A" stroke="#fff" stroke-width="3"/>
+    <rect x="36" y="22" width="8" height="26" rx="3" fill="#fff"/><rect x="36" y="54" width="8" height="8" rx="3" fill="#fff"/>
+  </g>
+</svg>

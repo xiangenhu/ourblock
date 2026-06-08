@@ -39,10 +39,11 @@ export const api = {
     return data;
   },
 
-  /** Ask the vision model for a {title, description} from a photo (not stored). */
-  async describeImage(file, stream) {
+  /** Ask the LLM for a {title, description} from a photo and/or a note (not stored). */
+  async compose({ file, note, stream } = {}) {
     const fd = new FormData();
-    fd.append('media', file);
+    if (file) fd.append('media', file);
+    if (note) fd.append('note', note);
     if (stream) fd.append('stream', stream);
     const res = await fetch('/api/ai/describe', {
       method: 'POST',
@@ -51,8 +52,13 @@ export const api = {
       body: fd,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Describe failed');
+    if (!res.ok) throw new Error(data.error || 'Compose failed');
     return data; // { title, description }
+  },
+
+  /** Photo-only convenience wrapper used by the signed-in capture screen. */
+  describeImage(file, stream) {
+    return this.compose({ file, stream });
   },
 
   saveToken: (t) => t && localStorage.setItem(TOKEN_KEY, t),

@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { h, esc, timeAgo, dist, toast, ICONS } from './ui.js';
+import { exifGps, haversine } from './exif.js';
 
 const app = document.getElementById('app');
 
@@ -47,7 +48,15 @@ async function boot() {
 function routeFromHash() {
   const hash = location.hash.replace(/^#\/?/, '');
   const [seg, id] = hash.split('/');
-  if (!state.user) return renderAuth();
+
+  // Anonymous visitors get a public landing page — not the login wall. They can
+  // explore samples, read posts, share something good, or choose to log in.
+  if (!state.user) {
+    if (seg === 'login' || seg === 'auth') return renderAuth();
+    if (seg === 'share') return renderAnonShare();
+    if (seg === 'post' && id) return renderAnonPost(id);
+    return renderLanding();
+  }
 
   if (seg === 'post' && id) { state.view = 'post'; state.postId = id; }
   else if (NAV.some((n) => n.key === seg)) { state.view = seg; if (seg === 'good' || seg === 'care') state.stream = seg; }
@@ -57,6 +66,25 @@ function routeFromHash() {
 }
 
 function go(path) { location.hash = `#/${path}`; }
+
+// A photo's GPS can be off by a few hundred metres; 1 km blocks "taken in a different place".
+const GEO_THRESHOLD_M = 1000;
+
+/**
+ * Confirm a photo was taken where the device is now. Sets draft.geoFar (true only when the
+ * photo carries GPS *and* it's far from the live location), updates the status line, and
+ * calls onChange() so the post button can re-gate. No EXIF GPS → can't verify → allowed.
+ */
+function verifyPhotoGeo(draft, statusEl, onChange) {
+  const show = (cls, txt) => { if (statusEl) { statusEl.className = 'geo-check ' + cls; statusEl.textContent = txt; } };
+  if (!draft.photoGps) { draft.geoFar = false; if (statusEl) statusEl.className = 'geo-check hidden'; onChange?.(); return; }
+  if (!draft.coords) return; // wait until the device location arrives, then re-run
+  const d = haversine(draft.photoGps, draft.coords);
+  draft.geoFar = d != null && d > GEO_THRESHOLD_M;
+  if (draft.geoFar) show('bad', `⚠ This photo looks like it was taken about ${dist(d)} away. Use a photo taken here, on this device.`);
+  else show('ok', '✓ Photo location matches where you are.');
+  onChange?.();
+}
 
 /* ------------------------------------------------------------------- auth */
 const GOOGLE_G = '<svg width="17" height="17" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.4 5.4 2.5 13.2l7.8 6.1C12.2 13.4 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.2-.4-4.7H24v9h12.4c-.5 2.9-2.1 5.4-4.6 7l7.1 5.5c4.2-3.9 6.6-9.6 6.6-16.8z"/><path fill="#FBBC05" d="M10.3 19.3c-.5 1.4-.8 2.9-.8 4.5s.3 3.1.8 4.5l-7.8 6.1C.9 31 0 27.6 0 24s.9-7 2.5-10.6l7.8 5.9z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.1-5.5c-2 1.3-4.6 2.1-8.1 2.1-6.4 0-11.8-3.9-13.7-9.4l-7.8 6.1C6.4 42.6 14.6 48 24 48z"/></svg>';
@@ -125,6 +153,7 @@ function renderAuth() {
 
     const card = h(`
       <div class="auth-wrap"><div class="auth-card">
+        <a class="auth-back" data-back>‹ Back to explore</a>
         <div class="brand cjk">优城美市<small>Our Block</small></div>
         <div class="auth-tag">${titles[mode]}</div>
         <div class="err-slot"></div>
@@ -133,6 +162,8 @@ function renderAuth() {
       </div></div>`);
 
     if (oauthErr && mode === 'login') setErr(card, "Google sign-in didn't complete. Please try again.");
+
+    card.querySelector('[data-back]')?.addEventListener('click', () => go(''));
 
     const gbtn = card.querySelector('[data-google]');
     if (gbtn) gbtn.onclick = () => {
@@ -192,6 +223,347 @@ function renderAuth() {
     app.appendChild(card);
   };
   mount();
+}
+
+/* ===================================================================== landing
+ * Everything an anonymous visitor sees: an attractive public page with sample
+ * Good/Care locations on a live map, a way to share "the good" (location only),
+ * read-only post detail, and a Log in button. "Needs care" + replies need auth.
+ * ========================================================================== */
+
+let _samplesCache = null;
+async function getSamples() {
+  if (_samplesCache) return _samplesCache;
+  try { _samplesCache = (await api.get('/api/posts/samples')).samples || []; }
+  catch { _samplesCache = []; }
+  return _samplesCache;
+}
+
+function anonTopBar() {
+  const bar = h(`
+    <header class="land-top">
+      <div class="brand cjk" data-home>优城美市<small>Our Block</small></div>
+      <button class="btn primary land-login">Log in</button>
+    </header>`);
+  bar.querySelector('[data-home]').onclick = () => go('');
+  bar.querySelector('.land-login').onclick = () => go('login');
+  return bar;
+}
+
+async function renderLanding() {
+  app.innerHTML = '';
+  const wrap = h(`<div class="landing"></div>`);
+  wrap.appendChild(anonTopBar());
+
+  const hero = h(`
+    <section class="hero">
+      <h1>Your block, in good hands — together.</h1>
+      <p>Notice the good on your street, and flag what needs care — then act. Here's what neighbours nearby are noticing right now.</p>
+      <div class="hero-cta">
+        <button class="btn primary" data-share>✦ Share something good</button>
+        <button class="btn ghost" data-login>△ Log in to flag care</button>
+      </div>
+      <div class="hero-note">Sharing “the good” is open to everyone — just allow your location. Flagging “needs care” and replying to neighbours need a free account.</div>
+    </section>`);
+  hero.querySelector('[data-share]').onclick = () => go('share');
+  hero.querySelector('[data-login]').onclick = () => go('login');
+  wrap.appendChild(hero);
+
+  const samples = await getSamples();
+  wrap.appendChild(landingMap(samples));
+
+  // Mix real public "good" posts in with the samples; care column is samples only
+  // (anonymous visitors can't create care, so there's nothing real to surface yet).
+  let realGood = [];
+  try { realGood = (await api.get('/api/posts?stream=good&sort=new&limit=6')).posts || []; } catch { /* offline */ }
+  const goodAll = [...realGood, ...samples.filter((s) => s.stream === 'good')];
+  const care = samples.filter((s) => s.stream === 'care');
+
+  const cols = h(`<div class="land-cols"></div>`);
+  const goodCol = h(`<div class="land-col"><h2>✦ The Good nearby</h2><div class="land-grid"></div></div>`);
+  const careCol = h(`<div class="land-col"><h2>△ Needs Care nearby</h2><div class="land-grid"></div></div>`);
+  goodAll.forEach((p) => goodCol.querySelector('.land-grid').appendChild(landingCard(p)));
+  care.forEach((p) => careCol.querySelector('.land-grid').appendChild(landingCard(p)));
+  cols.append(goodCol, careCol);
+  wrap.appendChild(cols);
+
+  wrap.appendChild(h(`<footer class="land-foot">优城美市 · Our Block — a place-based civic wellbeing app.</footer>`));
+  app.appendChild(wrap);
+}
+
+function landingCard(p) {
+  const g = p.stream === 'good';
+  const card = h(`<article class="lcard"></article>`);
+  card.appendChild(p.mediaUrl
+    ? h(`<div class="lmedia"><img src="${esc(p.mediaUrl)}" alt=""></div>`)
+    : h(`<div class="lmedia ph ${g ? 'g' : 'c'}">${g ? '✦' : '△'}</div>`));
+  card.appendChild(h(`<div class="lbody">
+      <h3>${esc(p.title)}</h3>
+      <p>${esc(p.body || '')}</p>
+      <div class="lmeta">📍 ${esc(p.placeName || 'Nearby')} · ${esc(p.author?.name || 'A neighbour')} · ${timeAgo(p.createdAt)}${p.sample ? ' · <span class="sample-tag">sample</span>' : ''}</div>
+    </div>`));
+  card.onclick = () => go(`post/${p.id}`);
+  return card;
+}
+
+function landingMap(samples) {
+  const card = h(`
+    <div class="map-card land-map">
+      <div class="loc"><span class="live"></span>📍 <span class="loc-name">Exploring nearby</span></div>
+      <div class="gmap"></div>
+    </div>`);
+  const el = card.querySelector('.gmap');
+  const nameEl = card.querySelector('.loc-name');
+
+  loadMaps().then(async (maps) => {
+    const first = samples[0];
+    let real = [];
+    try { real = (await api.get('/api/posts/pins')).pins || []; } catch { /* offline */ }
+
+    const map = new maps.Map(el, {
+      center: first ? { lat: first.lat, lng: first.lng } : { lat: 20, lng: 0 },
+      zoom: first ? 14 : 2,
+      disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy', clickableIcons: false,
+    });
+
+    const markers = [];
+    const place = (origin) => {
+      markers.forEach((m) => m.setMap(null));
+      markers.length = 0;
+      const bounds = new maps.LatLngBounds();
+      const add = (lat, lng, good, id) => {
+        const m = new maps.Marker({ position: { lat, lng }, map, icon: pinIcon(maps, good) });
+        m.addListener('click', () => go(`post/${id}`));
+        markers.push(m); bounds.extend({ lat, lng });
+      };
+      // Place sample pins near the visitor when we know where they are.
+      samples.forEach((s) => {
+        const lat = origin && s.offset ? origin.lat + s.offset.dLat : s.lat;
+        const lng = origin && s.offset ? origin.lng + s.offset.dLng : s.lng;
+        add(lat, lng, s.stream === 'good', s.id);
+      });
+      real.filter((p) => p.lat != null).forEach((p) => add(p.lat, p.lng, p.stream === 'good', p.id));
+      if (origin) { new maps.Marker({ position: origin, map, icon: youIcon(maps), title: 'You', zIndex: 999 }); bounds.extend(origin); }
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, 48);
+        maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+      }
+    };
+    place(null);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        place(here);
+        const geo = await reverseGeocode(here.lat, here.lng);
+        if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
+      }, () => { /* keep sample view */ }, { enableHighAccuracy: true, timeout: 8000 });
+    }
+  }).catch(() => {
+    el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
+      '<span>Set a Google Maps API key (MAPS_API_KEY) to enable the live map.</span></div>';
+  });
+
+  return card;
+}
+
+/* --------------------------------------------------- anonymous "share the good" */
+function renderAnonShare() {
+  app.innerHTML = '';
+  const wrap = h(`<div class="landing"></div>`);
+  wrap.appendChild(anonTopBar());
+
+  const view = h(`
+    <section class="share-view">
+      <a class="back-link" data-back>‹ Back to explore</a>
+      <h1>Share something good ✦</h1>
+      <p class="share-sub">Savour what your neighbours are doing well. A photo is required as evidence, and your location is attached so it lands on the block. No account needed.</p>
+      <div class="loc-status" data-loc>Requesting your location…</div>
+
+      <label class="photo-cta">${ICONS.camera}<span><b>Take a photo</b><small>Required as evidence — the AI writes the title &amp; description from it</small></span>
+        <input type="file" accept="image/*" capture="environment" hidden></label>
+      <div class="vf-preview hidden"></div>
+      <div class="geo-check hidden"></div>
+
+      <div class="card">
+        <div class="field"><label>Add a note <small>(optional)</small></label><input name="note" placeholder="anything extra for your neighbours"></div>
+        <button class="btn ghost" data-ai>${ICONS.spark} Suggest title &amp; description</button>
+        <div class="ai-preview hidden">${ICONS.spark}<div class="ai-text"></div></div>
+        <div class="field"><label>Title</label><input name="title" placeholder="A short title"></div>
+        <div class="field"><label>Description <small>(50 words or less)</small></label><textarea name="desc" rows="3" placeholder="A warm line for your neighbours"></textarea></div>
+        <button class="btn primary" data-post disabled>Post to the block</button>
+        <div class="share-foot">Want to flag something that needs care? <a data-login>Log in</a>.</div>
+      </div>
+    </section>`);
+  wrap.appendChild(view);
+  app.appendChild(wrap);
+
+  const draft = { coords: null, place: null, file: null };
+  const locEl = view.querySelector('[data-loc]');
+  const noteInput = view.querySelector('[name=note]');
+  const titleInput = view.querySelector('[name=title]');
+  const descInput = view.querySelector('[name=desc]');
+  const aiBox = view.querySelector('.ai-preview');
+  const aiText = view.querySelector('.ai-text');
+  const postBtn = view.querySelector('[data-post]');
+  const preview = view.querySelector('.vf-preview');
+  const geoEl = view.querySelector('.geo-check');
+
+  view.querySelector('[data-back]').onclick = () => go('');
+  view.querySelector('[data-login]').onclick = () => go('login');
+
+  // A post needs a title, a photo (evidence) and a location — and the photo's GPS (if any)
+  // must match that location.
+  const refresh = () => { postBtn.disabled = !titleInput.value.trim() || !draft.coords || !draft.file || draft.geoFar; };
+  titleInput.oninput = refresh;
+
+  // location is mandatory for any post
+  const setLoc = (txt, ok) => { locEl.textContent = txt; locEl.classList.toggle('ok', !!ok); };
+  function requestLoc() {
+    if (!navigator.geolocation) { setLoc('Location isn’t available on this device — you can’t post here.', false); return; }
+    setLoc('Requesting your location…', false);
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      draft.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const geo = await reverseGeocode(draft.coords.lat, draft.coords.lng);
+      draft.place = geo?.placeName || `${draft.coords.lat.toFixed(4)}, ${draft.coords.lng.toFixed(4)}`;
+      setLoc(`📍 ${draft.place}`, true);
+      verifyPhotoGeo(draft, geoEl, refresh); // recheck the photo against this location
+    }, () => setLoc('Turn on location to post to the block — tap to retry.', false),
+    { enableHighAccuracy: true, timeout: 8000 });
+  }
+  locEl.onclick = requestLoc;
+  requestLoc();
+
+  // photo → preview + auto-compose from the image
+  view.querySelector('input[type=file]').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    draft.file = file;
+    preview.classList.remove('hidden');
+    preview.innerHTML = '';
+    preview.appendChild(h(`<img src="${URL.createObjectURL(file)}" alt="preview">`));
+    refresh();
+    compose();
+    draft.photoGps = null;
+    exifGps(file).then((g) => { draft.photoGps = g; verifyPhotoGeo(draft, geoEl, refresh); });
+  };
+
+  // AI compose (from the photo and/or the note)
+  let seq = 0;
+  async function compose() {
+    if (!draft.file && !noteInput.value.trim()) { toast('Take a photo or write a few words first', ''); return; }
+    const my = ++seq;
+    aiBox.classList.remove('hidden');
+    aiText.innerHTML = '<b>Thinking…</b>';
+    try {
+      const { title, description } = await api.compose({ file: draft.file, note: noteInput.value.trim(), stream: 'good' });
+      if (my !== seq) return;
+      if (title && !titleInput.value.trim()) titleInput.value = title;
+      if (description && !descInput.value.trim()) descInput.value = description;
+      aiText.innerHTML = '<b>Suggested — edit anything before posting.</b>';
+      refresh();
+    } catch (err) { aiBox.classList.add('hidden'); toast(err.message, 'err'); }
+  }
+  view.querySelector('[data-ai]').onclick = compose;
+
+  postBtn.onclick = async () => {
+    if (!draft.coords) { toast('Turn on location first', 'err'); return; }
+    postBtn.disabled = true; postBtn.textContent = 'Posting…';
+    try {
+      let mediaUrl = null, mediaType = 'photo';
+      if (draft.file) { const u = await api.upload(draft.file); mediaUrl = u.url; mediaType = u.mediaType; }
+      const { post } = await api.post('/api/posts', {
+        stream: 'good',
+        title: titleInput.value.trim(),
+        body: descInput.value.trim(),
+        mediaType, mediaUrl,
+        lat: draft.coords.lat, lng: draft.coords.lng,
+        placeName: draft.place,
+      });
+      toast('Posted to your block ✦', 'ok');
+      go(`post/${post.id}`);
+    } catch (err) {
+      toast(err.message, 'err');
+      postBtn.disabled = false; postBtn.textContent = 'Post to the block';
+    }
+  };
+}
+
+/** A small map centred on a single post's location (used in post detail views). */
+function detailMap(p) {
+  if (p.lat == null || p.lng == null) return null;
+  const card = h(`<div class="map-card detail-map"><div class="gmap"></div></div>`);
+  const el = card.querySelector('.gmap');
+  loadMaps().then((maps) => {
+    const center = { lat: p.lat, lng: p.lng };
+    const map = new maps.Map(el, {
+      center, zoom: 16, disableDefaultUI: true, zoomControl: true,
+      gestureHandling: 'greedy', clickableIcons: false,
+    });
+    new maps.Marker({ position: center, map, icon: pinIcon(maps, p.stream === 'good') });
+  }).catch(() => {
+    el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
+      '<span>Set a Google Maps API key to enable the map.</span></div>';
+  });
+  return card;
+}
+
+/* ----------------------------------------------- anonymous read-only post detail */
+async function renderAnonPost(id) {
+  app.innerHTML = '';
+  const wrap = h(`<div class="landing"></div>`);
+  wrap.appendChild(anonTopBar());
+  const view = h(`<section class="anon-post"><a class="back-link" data-back>‹ Back to explore</a><div class="slot"><div class="spinner"></div></div></section>`);
+  wrap.appendChild(view);
+  app.appendChild(wrap);
+  view.querySelector('[data-back]').onclick = () => go('');
+  const slot = view.querySelector('.slot');
+
+  if (String(id).startsWith('sample-')) {
+    const p = (await getSamples()).find((s) => s.id === id);
+    slot.innerHTML = '';
+    slot.appendChild(p ? anonPostCard(p, { sample: true }) : h(`<div class="empty"><b>Not found</b></div>`));
+    return;
+  }
+  try {
+    const { post: p, comments } = await api.get(`/api/posts/${id}`);
+    slot.innerHTML = '';
+    slot.appendChild(anonPostCard(p, { comments }));
+  } catch (err) {
+    slot.innerHTML = `<div class="empty"><b>Couldn't load this post</b>${esc(err.message)}</div>`;
+  }
+}
+
+function anonPostCard(p, { sample, comments } = {}) {
+  const g = p.stream === 'good';
+  const box = h(`<div></div>`);
+  box.appendChild(p.mediaUrl
+    ? h(`<div class="detail-media"><img src="${esc(p.mediaUrl)}" alt=""></div>`)
+    : h(`<div class="detail-media ${g ? 'g' : 'c'}"></div>`));
+  const dm = detailMap(p);
+  if (dm) box.appendChild(dm);
+  box.appendChild(h(`<div class="card" style="margin-top:14px">
+      <div><span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ The Good' : '△ Needs Care'}</span>${sample ? ' <span class="sample-tag">sample</span>' : ''}</div>
+      <h2 style="font-family:var(--display);font-size:22px;margin:8px 0 6px">${esc(p.title)}</h2>
+      <div class="pmeta">📍 ${esc(p.placeName || 'Nearby')} · ${esc(p.author?.name || 'A neighbour')} · ${timeAgo(p.createdAt)}</div>
+      ${p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : ''}
+    </div>`));
+
+  const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">Neighbour replies${comments ? ` (${comments.length})` : ''}</h4></div>`);
+  if (sample) {
+    cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">This is a sample showing how Our Block works. Log in to join your real block.</p>`));
+  } else {
+    (comments || []).forEach((c) => cbox.appendChild(h(`
+      <div class="comment"><div class="av">${esc(c.avatar || '·')}</div>
+        <div><b>${esc(c.author)}</b> <span style="color:var(--ink-soft);font-size:11px">· ${timeAgo(c.createdAt)}</span>
+        <p>${esc(c.body)}</p></div></div>`)));
+    if (!comments || !comments.length) cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">No replies yet.</p>`));
+    const prompt = h(`<button class="btn primary" style="margin-top:10px;width:auto;padding:10px 16px">Log in to reply</button>`);
+    prompt.onclick = () => go('login');
+    cbox.appendChild(prompt);
+  }
+  box.appendChild(cbox);
+  return box;
 }
 
 /* --------------------------------------------------------------- app shell */
@@ -364,8 +736,8 @@ function feedView() {
   });
   wrap.appendChild(sorts);
 
-  // map (only on Near Me)
-  if (isNear) wrap.appendChild(mapCard());
+  // map — always shown. Near Me shows everything; the Good/Care views show their stream.
+  wrap.appendChild(mapCard(isNear ? null : state.stream));
 
   const feed = h(`<div class="feed"></div>`);
   feed.appendChild(h(`<div class="spinner"></div>`));
@@ -528,7 +900,7 @@ function pinIcon(maps, good) {
   };
 }
 
-function mapCard() {
+function mapCard(streamFilter) {
   const card = h(`
     <div class="map-card">
       <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || 'Locating…')}</span></div>
@@ -540,6 +912,8 @@ function mapCard() {
   loadMaps().then(async (maps) => {
     let data = { pins: [], viewer: null };
     try { data = await api.get('/api/posts/pins'); } catch { /* show base map */ }
+    // On the Good/Care views, show only that stream's pins; on Near Me, show all.
+    const pins = streamFilter ? data.pins.filter((p) => p.stream === streamFilter) : data.pins;
 
     const viewerCenter =
       data.viewer && data.viewer.lat != null ? { lat: data.viewer.lat, lng: data.viewer.lng }
@@ -564,7 +938,7 @@ function mapCard() {
 
     const bounds = new maps.LatLngBounds();
     if (viewerCenter) { setYou(viewerCenter); bounds.extend(viewerCenter); }
-    data.pins.filter((p) => p.lat != null).forEach((p) => {
+    pins.filter((p) => p.lat != null).forEach((p) => {
       const m = new maps.Marker({
         position: { lat: p.lat, lng: p.lng }, map,
         icon: pinIcon(maps, p.stream === 'good'), title: p.title || '',
@@ -574,7 +948,7 @@ function mapCard() {
     });
 
     // Frame everything, but never zoom in too far on a lone pin.
-    if (data.pins.length && !bounds.isEmpty()) {
+    if (pins.length && !bounds.isEmpty()) {
       map.fitBounds(bounds, 64);
       maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
     }
@@ -690,11 +1064,13 @@ function captureView() {
   wrap.appendChild(modes);
 
   const up = h(`<div class="upbtns">
-      <label class="upbtn">${ICONS.camera}Upload photo<input type="file" accept="image/*" hidden></label>
-      <label class="upbtn">${ICONS.video}Upload video<input type="file" accept="video/*" capture="environment" hidden></label>
+      <label class="upbtn">${ICONS.camera}Take a photo<input type="file" accept="image/*" capture="environment" hidden></label>
+      <label class="upbtn">${ICONS.video}Take a video<input type="file" accept="video/*" capture="environment" hidden></label>
     </div>`);
   up.querySelectorAll('input').forEach((inp) => inp.onchange = (e) => onFile(e.target.files[0]));
   wrap.appendChild(up);
+  const geoEl = h(`<div class="geo-check hidden"></div>`);
+  wrap.appendChild(geoEl);
 
   // stream picker
   const pick = h(`<div class="stream-pick">
@@ -719,7 +1095,10 @@ function captureView() {
   const aiBox = form.querySelector('.ai-preview');
   const aiText = form.querySelector('.ai-text');
   const submit = form.querySelector('button');
-  titleInput.oninput = () => { submit.disabled = !titleInput.value.trim() || !draft.file; };
+  // A post needs a title, a photo/video, a real location, and the photo's GPS (if any)
+  // must match that location.
+  const refreshSubmit = () => { submit.disabled = !titleInput.value.trim() || !draft.file || !draft.coords || draft.geoFar; };
+  titleInput.oninput = refreshSubmit;
   wrap.appendChild(form);
 
   // Ask the vision model to suggest a title + description from the photo. Fills only
@@ -734,7 +1113,7 @@ function captureView() {
       if (seq !== describeSeq) return; // a newer photo superseded this one
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !bodyInput.value.trim()) bodyInput.value = description;
-      submit.disabled = !titleInput.value.trim() || !draft.file;
+      refreshSubmit();
       aiText.innerHTML = '<b>Suggested from your photo</b><p>Edit anything before you post.</p>';
     } catch {
       if (seq === describeSeq) aiBox.classList.add('hidden'); // silent fall back to manual
@@ -751,14 +1130,23 @@ function captureView() {
     vf.insertBefore(draft.mediaType === 'video'
       ? h(`<video src="${url}" controls muted playsinline></video>`)
       : h(`<img src="${url}" alt="preview">`), vf.querySelector('.grid3'));
-    submit.disabled = !titleInput.value.trim();
-    if (draft.mediaType === 'photo') autoDescribe(file); // vision only applies to stills
+    refreshSubmit();
+    if (draft.mediaType === 'photo') {
+      autoDescribe(file); // vision only applies to stills
+      draft.photoGps = null;
+      exifGps(file).then((g) => { draft.photoGps = g; verifyPhotoGeo(draft, geoEl, refreshSubmit); });
+    } else {
+      draft.photoGps = null; verifyPhotoGeo(draft, geoEl, refreshSubmit);
+    }
   }
 
-  // geolocation → reverse-geocode the real GPS into a street / neighbourhood name
+  // geolocation → reverse-geocode the real GPS into a street / neighbourhood name.
+  // Location is required: until we have a fix, the post button stays disabled.
+  const vfLoc = vf.querySelector('.vf-loc');
   const showLoc = (txt) => { vf.querySelector('.loc-text').textContent = txt; };
   const onCoords = async (lat, lng) => {
     draft.coords = { lat, lng };
+    verifyPhotoGeo(draft, geoEl, refreshSubmit); // recheck now that we know where we are
     showLoc('Locating…');
     const geo = await reverseGeocode(lat, lng);
     draft.place = geo?.placeName || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
@@ -768,14 +1156,17 @@ function captureView() {
     api.put('/api/auth/me/location', { lat, lng, neighborhood: draft.neighborhood })
       .then(({ user }) => { state.user = user; }).catch(() => {});
   };
-  if (navigator.geolocation) {
+  function requestLoc() {
+    if (!navigator.geolocation) { showLoc('Location unavailable on this device'); return; }
     showLoc('Locating…');
     navigator.geolocation.getCurrentPosition(
       (pos) => onCoords(pos.coords.latitude, pos.coords.longitude),
-      () => showLoc(state.user.neighborhood || 'Location unavailable'),
+      () => { draft.coords = null; refreshSubmit(); showLoc('Turn on location to post — tap to retry'); },
       { enableHighAccuracy: true, timeout: 6000 }
     );
-  } else showLoc(state.user.neighborhood || 'Location unavailable');
+  }
+  if (vfLoc) vfLoc.style.cursor = 'pointer', vfLoc.onclick = requestLoc;
+  requestLoc();
 
   submit.onclick = async () => {
     submit.disabled = true; submit.textContent = 'Posting…';
@@ -831,6 +1222,8 @@ function postDetailView() {
       media.appendChild(h(`<span class="badge" style="position:absolute;bottom:10px;left:10px">${p.mediaType === 'video' ? '▶ Video' : '◎ Photo'}</span>`));
     }
     slot.appendChild(media);
+    const dm = detailMap(p);
+    if (dm) slot.appendChild(dm);
 
     const card = h(`<div class="card" style="margin-top:14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">

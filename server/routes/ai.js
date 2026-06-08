@@ -1,15 +1,16 @@
 /**
  * routes/ai.js — on-demand AI helpers for the capture flow.
  *
- *   POST /api/ai/describe   multipart "media" (image) [+ "stream"] -> { title, description }
+ *   POST /api/ai/describe   multipart: optional "media" (image) + optional "note" + "stream"
+ *                           -> { title, description }   (description is 50 words or less)
  *
- * The image is buffered in memory and forwarded to the vision model through the single
- * LLM gateway — it is NOT stored in GCS here (the real upload happens on post submit).
+ * Composes a title + short description from a photo and/or the neighbour's note via the
+ * single LLM gateway. The image is buffered in memory and never stored here (the real
+ * upload happens on post submit). Open to guests so anonymous "The Good" posts can use it.
  */
 import express from 'express';
 import multer from 'multer';
-import { requireAuth } from '../auth.js';
-import { describeImage } from '../ai.js';
+import { composePost } from '../ai.js';
 
 const isImage = (m) => /^image\//.test(m || '');
 
@@ -21,21 +22,23 @@ const upload = multer({
 
 const router = express.Router();
 
-router.post('/describe', requireAuth, (req, res) => {
+router.post('/describe', (req, res) => {
   upload.single('media')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
-    if (!req.file) return res.status(400).json({ error: 'No image received.' });
+    const note = (req.body?.note || '').trim();
+    if (!req.file && !note) return res.status(400).json({ error: 'Add a photo or a short note.' });
     try {
-      const out = await describeImage({
-        base64: req.file.buffer.toString('base64'),
-        mediaType: req.file.mimetype,
+      const out = await composePost({
+        base64: req.file ? req.file.buffer.toString('base64') : null,
+        mediaType: req.file?.mimetype,
+        note,
         stream: req.body?.stream === 'good' ? 'good' : 'care',
-        userId: req.userId,
+        userId: req.userId, // present only when signed in; used for token accounting
       });
-      if (!out) return res.status(503).json({ error: 'AI description is unavailable right now.' });
+      if (!out) return res.status(503).json({ error: 'AI is unavailable right now.' });
       res.json(out);
     } catch (e) {
-      res.status(502).json({ error: `Describe failed: ${e.message}` });
+      res.status(502).json({ error: `Compose failed: ${e.message}` });
     }
   });
 });
