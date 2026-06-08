@@ -39,6 +39,22 @@ export const api = {
     return data;
   },
 
+  /** Ask the vision model for a {title, description} from a photo (not stored). */
+  async describeImage(file, stream) {
+    const fd = new FormData();
+    fd.append('media', file);
+    if (stream) fd.append('stream', stream);
+    const res = await fetch('/api/ai/describe', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { ...authHeaders() },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Describe failed');
+    return data; // { title, description }
+  },
+
   saveToken: (t) => t && localStorage.setItem(TOKEN_KEY, t),
   clearToken: () => localStorage.removeItem(TOKEN_KEY),
 };

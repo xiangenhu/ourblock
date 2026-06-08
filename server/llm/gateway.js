@@ -32,8 +32,31 @@ function withTimeout(ms) {
   return { signal: ctrl.signal, done: () => clearTimeout(t) };
 }
 
+// ── Multimodal helpers — fold an optional { base64, mediaType } image into the
+//    user message in each provider's native wire format. No image → plain string.
+function openAIUserContent(user, image) {
+  if (!image) return String(user || '');
+  return [
+    ...(user ? [{ type: 'text', text: String(user) }] : []),
+    { type: 'image_url', image_url: { url: `data:${image.mediaType};base64,${image.base64}` } },
+  ];
+}
+function anthropicUserContent(user, image) {
+  if (!image) return String(user || '');
+  return [
+    ...(user ? [{ type: 'text', text: String(user) }] : []),
+    { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.base64 } },
+  ];
+}
+function geminiParts(user, image) {
+  const parts = [];
+  if (user) parts.push({ text: String(user) });
+  if (image) parts.push({ inlineData: { mimeType: image.mediaType, data: image.base64 } });
+  return parts.length ? parts : [{ text: '' }];
+}
+
 // ── Provider shapes — the only places that touch a provider wire format ───────
-async function callOpenAIShape(v, { sys, user, model, maxTokens, json }) {
+async function callOpenAIShape(v, { sys, user, image, model, maxTokens, json }) {
   const r = await fetch(`${v.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${v.apiKey}` },
@@ -44,7 +67,7 @@ async function callOpenAIShape(v, { sys, user, model, maxTokens, json }) {
       ...(json ? { response_format: { type: 'json_object' } } : {}),
       messages: [
         ...(sys ? [{ role: 'system', content: sys }] : []),
-        { role: 'user', content: String(user || '') },
+        { role: 'user', content: openAIUserContent(user, image) },
       ],
     }),
   });
@@ -58,7 +81,7 @@ async function callOpenAIShape(v, { sys, user, model, maxTokens, json }) {
   };
 }
 
-async function callAnthropicShape(v, { sys, user, model, maxTokens }) {
+async function callAnthropicShape(v, { sys, user, image, model, maxTokens }) {
   const r = await fetch(`${v.baseUrl}/v1/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': v.apiKey, 'anthropic-version': '2023-06-01' },
@@ -67,7 +90,7 @@ async function callAnthropicShape(v, { sys, user, model, maxTokens }) {
       model,
       max_tokens: maxTokens,
       ...(sys ? { system: sys } : {}),
-      messages: [{ role: 'user', content: String(user || '') }],
+      messages: [{ role: 'user', content: anthropicUserContent(user, image) }],
     }),
   });
   if (!r.ok) throw new Error(`[llm] anthropic ${r.status}: ${(await r.text().catch(() => '')).slice(0, 300)}`);
@@ -81,7 +104,7 @@ async function callAnthropicShape(v, { sys, user, model, maxTokens }) {
   };
 }
 
-async function callGeminiShape(v, { sys, user, model, maxTokens, json }) {
+async function callGeminiShape(v, { sys, user, image, model, maxTokens, json }) {
   const url = `${v.baseUrl}/models/${model}:generateContent?key=${v.apiKey}`;
   const r = await fetch(url, {
     method: 'POST',
@@ -89,7 +112,7 @@ async function callGeminiShape(v, { sys, user, model, maxTokens, json }) {
     signal: v.signal,
     body: JSON.stringify({
       ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-      contents: [{ role: 'user', parts: [{ text: String(user || '') }] }],
+      contents: [{ role: 'user', parts: geminiParts(user, image) }],
       generationConfig: { maxOutputTokens: maxTokens, ...(json ? { responseMimeType: 'application/json' } : {}) },
     }),
   });
@@ -109,7 +132,7 @@ const SHAPES = { openai: callOpenAIShape, anthropic: callAnthropicShape, gemini:
  * The single entry point. Returns the model's text. `json:true` asks providers that
  * support it for a JSON object (callers still parse defensively).
  */
-export async function callLLM({ system, user, lang, userId, feature = 'general', maxTokens = 1024, model, json = false } = {}) {
+export async function callLLM({ system, user, image, lang, userId, feature = 'general', maxTokens = 1024, model, json = false } = {}) {
   const v = config.requireLlm();
   const chosenModel = model || v.model;
   const sys = [system, langDirective(lang)].filter(Boolean).join('\n'); // language enforced centrally
@@ -121,7 +144,7 @@ export async function callLLM({ system, user, lang, userId, feature = 'general',
   try {
     const { answer, usage } = await shapeFn(
       { ...v, vendor: config.llm.vendor, signal: t.signal },
-      { sys, user, model: chosenModel, maxTokens, json }
+      { sys, user, image, model: chosenModel, maxTokens, json }
     );
     record({ userId, feature, vendor: config.llm.vendor, model: chosenModel, usage }).catch(() => {});
     return answer;

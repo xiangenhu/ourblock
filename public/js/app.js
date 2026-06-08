@@ -715,9 +715,31 @@ function captureView() {
       <button class="btn primary" disabled>Post to the block</button>
     </div>`);
   const titleInput = form.querySelector('[name=title]');
+  const bodyInput = form.querySelector('[name=body]');
+  const aiBox = form.querySelector('.ai-preview');
+  const aiText = form.querySelector('.ai-text');
   const submit = form.querySelector('button');
   titleInput.oninput = () => { submit.disabled = !titleInput.value.trim() || !draft.file; };
   wrap.appendChild(form);
+
+  // Ask the vision model to suggest a title + description from the photo. Fills only
+  // empty fields (never clobbers what the neighbour typed) and stays fully editable.
+  let describeSeq = 0;
+  async function autoDescribe(file) {
+    const seq = ++describeSeq;
+    aiBox.classList.remove('hidden');
+    aiText.innerHTML = '<b>Reading your photo…</b>';
+    try {
+      const { title, description } = await api.describeImage(file, draft.stream);
+      if (seq !== describeSeq) return; // a newer photo superseded this one
+      if (title && !titleInput.value.trim()) titleInput.value = title;
+      if (description && !bodyInput.value.trim()) bodyInput.value = description;
+      submit.disabled = !titleInput.value.trim() || !draft.file;
+      aiText.innerHTML = '<b>Suggested from your photo</b><p>Edit anything before you post.</p>';
+    } catch {
+      if (seq === describeSeq) aiBox.classList.add('hidden'); // silent fall back to manual
+    }
+  }
 
   function onFile(file) {
     if (!file) return;
@@ -730,6 +752,7 @@ function captureView() {
       ? h(`<video src="${url}" controls muted playsinline></video>`)
       : h(`<img src="${url}" alt="preview">`), vf.querySelector('.grid3'));
     submit.disabled = !titleInput.value.trim();
+    if (draft.mediaType === 'photo') autoDescribe(file); // vision only applies to stills
   }
 
   // geolocation → reverse-geocode the real GPS into a street / neighbourhood name
