@@ -60,10 +60,3 @@ export const ICONS = {
   spark: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#234E3F" stroke-width="2.2"><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z"/></svg>',
   send: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>',
 };
-
-/** Project a lat/lng onto an SVG viewbox given a centre and span (degrees). */
-export function project(lat, lng, center, span, w, h) {
-  const x = ((lng - center.lng) / span + 0.5) * w;
-  const y = (0.5 - (lat - center.lat) / span) * h;
-  return { x: Math.max(8, Math.min(w - 8, x)), y: Math.max(8, Math.min(h - 8, y)) };
-}

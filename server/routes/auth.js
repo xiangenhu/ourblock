@@ -3,12 +3,13 @@
  *
  *   Google sign-in        GET  /api/auth/google/start  → gateway → Google → /google/callback
  *   Email + password      POST /register → (SMTP code) → /verify → session
- *   Login                 POST /login    (local demo accounts first, then gateway)
+ *   Login                 POST /login    (local-fallback accounts first, then gateway)
  *   Account management    /resend-code, /forgot-password, /reset-password, /change-password
  *
  * The gateway owns credentials and email delivery. We keep a local user *profile*
  * in the GCS store (so posts/reactions/stats can reference a stable id), upserted on
- * every successful gateway auth. Seeded demo accounts still log in locally via bcrypt.
+ * every successful gateway auth. Local-fallback accounts (gateway disabled) log in
+ * locally via bcrypt.
  */
 import express from 'express';
 import bcrypt from 'bcryptjs';
@@ -18,6 +19,7 @@ import { users } from '../store/repo.js';
 import store from '../store/gcs.js';
 import events from '../xapi/events.js';
 import oauthGateway from '../oauthGateway.js';
+import config from '../config.js';
 
 const router = express.Router();
 
@@ -37,6 +39,17 @@ function publicUser(u) {
     provider: u.provider || 'email',
     picture: u.picture || null,
   };
+}
+
+/**
+ * Does this gateway error mean "that email already has an account"?
+ * The shared gateway isn't strict about its error shape, so we match defensively:
+ * a 409, a conflict-ish `code`, or an "already / exists / in use" message.
+ */
+function isAlreadyRegistered(e) {
+  if (e.status === 409) return true;
+  if (e.code && /exist|registered|duplicate|conflict|taken/i.test(e.code)) return true;
+  return /already|exist|registered|in use|taken/i.test(e.message || '');
 }
 
 /** Forward a gateway error with a sensible status (4xx pass through, else 502). */
@@ -87,6 +100,9 @@ router.get('/config', (_req, res) => {
     googleEnabled: oauthGateway.enabled,
     gatewayEnabled: oauthGateway.enabled,
     gatewayUrl: oauthGateway.url,
+    // Browser Maps key (referrer-restricted, public by design). Empty → the SPA
+    // shows a "map unavailable" placeholder instead of the live map.
+    mapsApiKey: config.maps.apiKey,
   });
 });
 
@@ -107,7 +123,7 @@ router.post('/register', async (req, res) => {
       nameCjk: nameCjk || null,
       email,
       passwordHash: bcrypt.hashSync(password, 10),
-      neighborhood: neighborhood || 'Jing’an, Shanghai',
+      neighborhood: neighborhood || null,
       avatar: (nameCjk || name).trim().charAt(0).toUpperCase() || '·',
     });
     startSession(res, user);
@@ -119,6 +135,31 @@ router.post('/register', async (req, res) => {
     const out = await oauthGateway.register({ name, email, password });
     res.json({ pendingVerification: true, email, message: out.message || 'Verification code sent to your email.' });
   } catch (e) {
+    // The SMTP gateway already knows this email (it's shared across apps, so the
+    // account may have been created — and verified — elsewhere). Don't make the
+    // neighbour register again: if the password they just typed matches the
+    // gateway's record, log them straight in and auto-create the local profile.
+    if (isAlreadyRegistered(e)) {
+      try {
+        const out = await oauthGateway.login({ email, password });
+        const gwUser = out.user || {};
+        const user = await upsertUser({
+          email: gwUser.email || email,
+          name: gwUser.name || name,
+          nameCjk,
+          provider: 'email',
+          gatewayToken: out.token,
+        });
+        startSession(res, user);
+        return res.json({ user: publicUser(user) });
+      } catch (le) {
+        // Email exists but the password doesn't match (or it's still unverified):
+        // send them to sign-in / reset rather than silently failing.
+        if (le.status === 400 || le.status === 401)
+          return res.status(409).json({ error: 'That email is already registered. Try signing in instead.' });
+        return gatewayError(res, le);
+      }
+    }
     gatewayError(res, e);
   }
 });
@@ -157,7 +198,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
-  // 1) Local credentials first (seeded demo accounts + any local-fallback users).
+  // 1) Local credentials first (any local-fallback users created while gateway off).
   const local = await users.findByEmail(email);
   if (local && local.passwordHash && bcrypt.compareSync(password, local.passwordHash)) {
     startSession(res, local);

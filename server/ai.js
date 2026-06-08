@@ -97,4 +97,42 @@ export async function classify(input) {
   return (await viaGateway(input)) || heuristic(input);
 }
 
+/* ── Photo understanding ─────────────────────────────────────────────────────
+ * Given a captured photo, suggest a title + description the neighbour can edit
+ * before posting. Vision goes through the same single gateway (image option).
+ * Returns null on any failure so the UI silently falls back to manual entry.
+ */
+const DESCRIBE_SYSTEM =
+  'You help a neighbour post a civic observation about their block from a photo. ' +
+  'Look at the image and produce: a short, specific title (max 8 words, no quotation marks) ' +
+  'and a warm, plain-language description of one or two sentences, written the way a neighbour ' +
+  'would. Describe only what is visible. ' +
+  'Return ONLY JSON: {"title":string,"description":string}.';
+
+export async function describeImage({ base64, mediaType, stream = 'care', userId, lang } = {}) {
+  if (!config.has.llm() || !base64) return null;
+  try {
+    const txt = await callLLM({
+      feature: 'describe',
+      userId,
+      lang,
+      maxTokens: 250,
+      json: true,
+      system: DESCRIBE_SYSTEM,
+      user: stream === 'good'
+        ? 'This is for "The Good" stream — something worth savouring.'
+        : 'This is for "Needs Care" stream — something to fix or flag.',
+      image: { base64, mediaType: mediaType || 'image/jpeg' },
+    });
+    if (!txt) return null;
+    const json = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+    const title = String(json.title || '').trim().slice(0, 120);
+    const description = String(json.description || '').trim().slice(0, 500);
+    if (!title && !description) return null;
+    return { title, description };
+  } catch {
+    return null;
+  }
+}
+
 export { heuristic };
