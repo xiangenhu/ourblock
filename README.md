@@ -92,3 +92,10 @@ still sign in locally via bcrypt, so the demo works with `OAUTH_ENABLED=off` too
 
 The gateway's own Google client id, JWT/session secrets and `GMAIL_APP_PASSWORD` are
 configured **on the gateway**, not in this app.
+
+**Callback URL.** The gateway needs an absolute `redirect_uri`, but the app never hardcodes
+one. It is resolved in this order: `PUBLIC_URL` (explicit override) → the GitHub Codespaces
+forwarded origin (auto-derived from `CODESPACE_NAME` + port, e.g.
+`https://<name>-4000.app.github.dev/api/auth/google/callback`) → the browser's own origin
+(sent by the SPA, validated against the request host) → the request host. So it follows
+wherever the app is actually served — localhost, a Codespace, or a custom domain.

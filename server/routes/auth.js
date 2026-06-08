@@ -240,16 +240,51 @@ router.post('/change-password', requireAuth, async (req, res) => {
 });
 
 /* ──────────────────────────── Google OAuth ─────────────────────────────── */
-function publicOrigin(req) {
-  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
-  const proto = req.headers['x-forwarded-proto'] || req.protocol;
-  return `${proto}://${req.get('host')}`;
+const CALLBACK_PATH = '/api/auth/google/callback';
+
+/**
+ * The gateway needs an absolute redirect_uri (it bounces the browser back cross-origin,
+ * so a bare relative path would resolve against the gateway's own domain). We build it
+ * from the *browser's* origin rather than a hardcoded host:
+ *   1. PUBLIC_URL env, if explicitly set (production override);
+ *   2. the origin the SPA sent (location.origin) — but only when its host matches this
+ *      request's host, so it can never be turned into an open redirect;
+ *   3. otherwise reconstruct from the request (honouring proxy forwarding headers).
+ * In every case the callback path is fixed server-side.
+ */
+function codespacesOrigin() {
+  // In a GitHub Codespace the app is reached via the forwarded HTTPS URL
+  //   https://<CODESPACE_NAME>-<PORT>.<FORWARDING_DOMAIN>
+  // but the server internally sees Host: localhost:<PORT>, so we derive the public
+  // origin from the environment instead of the (internal) request host.
+  const name = process.env.CODESPACE_NAME;
+  const domain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+  if (!name || !domain) return null;
+  const port = process.env.PORT || '3000';
+  return `https://${name}-${port}.${domain}`;
+}
+
+function callbackUrl(req) {
+  if (process.env.PUBLIC_URL) return `${process.env.PUBLIC_URL.replace(/\/+$/, '')}${CALLBACK_PATH}`;
+
+  const cs = codespacesOrigin();
+  if (cs) return `${cs}${CALLBACK_PATH}`;
+
+  const reqHost = req.headers['x-forwarded-host'] || req.get('host');
+  const supplied = req.query.origin;
+  if (supplied) {
+    try {
+      const u = new URL(supplied);
+      if (u.host === reqHost) return `${u.origin}${CALLBACK_PATH}`; // browser-correct scheme + host
+    } catch { /* ignore malformed origin */ }
+  }
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+  return `${proto}://${reqHost}${CALLBACK_PATH}`;
 }
 
 router.get('/google/start', (req, res) => {
   if (!oauthGateway.enabled) return res.redirect('/#/login?error=oauth_disabled');
-  const redirectUri = `${publicOrigin(req)}/api/auth/google/callback`;
-  res.redirect(oauthGateway.googleLoginUrl(redirectUri));
+  res.redirect(oauthGateway.googleLoginUrl(callbackUrl(req)));
 });
 
 router.get('/google/callback', async (req, res) => {

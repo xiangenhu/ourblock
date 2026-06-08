@@ -136,7 +136,12 @@ function renderAuth() {
     if (oauthErr && mode === 'login') setErr(card, "Google sign-in didn't complete. Please try again.");
 
     const gbtn = card.querySelector('[data-google]');
-    if (gbtn) gbtn.onclick = () => { window.location.href = '/api/auth/google/start'; };
+    if (gbtn) gbtn.onclick = () => {
+      // Send the browser's real origin so the callback follows wherever the app is
+      // actually served (localhost, an HTTPS forward, a custom domain) — never a
+      // hardcoded host. The path stays relative; the server fixes the callback path.
+      window.location.href = `/api/auth/google/start?origin=${encodeURIComponent(location.origin)}`;
+    };
 
     card.querySelectorAll('[data-sw]').forEach((a) => {
       a.onclick = async () => {
