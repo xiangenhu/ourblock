@@ -85,6 +85,11 @@ const llm = {
   vendors: VENDORS,
 };
 
+// ── Google Maps (browser SDK + Geocoding; one referrer-restricted public key) ─
+const maps = {
+  apiKey: env.MAPS_API_KEY || '',
+};
+
 // ── Misc ─────────────────────────────────────────────────────────────────────
 const config = {
   port: Number(env.PORT) || 3000,
@@ -97,6 +102,7 @@ const config = {
   gcs,
   lrs,
   llm,
+  maps,
 };
 
 config.requireGcs = function requireGcs() {
@@ -127,6 +133,7 @@ config.has = {
   gcs: () => !!gcs.bucket,
   llm: () => !!(llm.vendors[llm.vendor] && llm.vendors[llm.vendor].apiKey),
   lrs: () => !!(lrs.endpoint && lrs.username && lrs.password),
+  maps: () => !!maps.apiKey,
 };
 
 config.bool = bool;

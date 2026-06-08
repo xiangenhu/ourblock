@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken';
+import config from './config.js';
+import { users } from './store/repo.js';
 
 const SECRET = process.env.JWT_SECRET || 'ourblock-dev-secret-change-me';
 const MAX_AGE = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -38,4 +40,27 @@ export function attachUser(req, _res, next) {
 export function requireAuth(req, res, next) {
   if (!req.userId) return res.status(401).json({ error: 'Sign in to do that.' });
   next();
+}
+
+/**
+ * Hard gate for Admin-only routes (deny by default — see _shared/roles.md).
+ *
+ * Our Block's only elevated allowlist is TEACHER_EMAILS (config.teacherEmails) — the
+ * steward/admin tier — so that is what "Admin" means here. Role is enforced server-side
+ * on the email of the verified token's user; a client-asserted role is never trusted.
+ *   401 → not signed in    403 → signed in but not on the admin allowlist
+ */
+export async function requireAdmin(req, res, next) {
+  try {
+    if (!req.userId) return res.status(401).json({ error: 'Sign in to do that.' });
+    const user = await users.getById(req.userId);
+    const email = (user?.email || '').trim().toLowerCase();
+    if (!email || !config.teacherEmails.includes(email)) {
+      return res.status(403).json({ error: 'Admins only.' });
+    }
+    req.user = user;
+    next();
+  } catch (e) {
+    next(e);
+  }
 }

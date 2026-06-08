@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { h, esc, timeAgo, dist, toast, ICONS, project } from './ui.js';
+import { h, esc, timeAgo, dist, toast, ICONS } from './ui.js';
 
 const app = document.getElementById('app');
 
@@ -81,8 +81,7 @@ function renderAuth() {
           <div class="field"><label>Password</label><input name="password" type="password" placeholder="••••••" required></div>
           <button class="btn primary" type="submit">Sign in</button>
         </form>
-        <div class="auth-switch"><a data-sw="forgot">Forgot password?</a> · New here? <a data-sw="register">Create an account</a></div>
-        <div class="demo-hint">Demo neighbour → <code>ling@ourblock.org</code> · <code>ourblock</code></div>`,
+        <div class="auth-switch"><a data-sw="forgot">Forgot password?</a> · New here? <a data-sw="register">Create an account</a></div>`,
       register: `
         <form class="auth-form" data-act="register">
           <div class="field"><label>Name</label><input name="name" placeholder="e.g. Ling W." required></div>
@@ -218,13 +217,13 @@ function renderShell(centerNode) {
       <div class="spacer"></div>
       <div class="me">
         <div class="av">${esc(u.avatar || '·')}</div>
-        <div><b>${esc(u.name)}</b><span>${esc(u.neighborhood)} · Lv. ${u.level} ${esc(u.levelTitle)}</span></div>
+        <div><b>${esc(u.name)}</b><span>${u.neighborhood ? esc(u.neighborhood) + ' · ' : ''}Lv. ${u.level} ${esc(u.levelTitle)}</span></div>
       </div>
       <button class="signout">Sign out</button>
     </aside>`);
   const navSlot = rail.querySelector('.nav-slot');
   NAV.forEach((n) => {
-    const item = h(`<button class="nav-i ${state.view === n.key ? 'on' : ''}">${ICONS[n.icon]}${n.label}</button>`);
+    const item = h(`<button class="nav-i ${state.view === n.key ? 'on' : ''}" data-help="nav-${n.key}">${ICONS[n.icon]}${n.label}</button>`);
     item.onclick = () => go(n.key);
     navSlot.appendChild(item);
   });
@@ -266,7 +265,7 @@ function mobileNav() {
 }
 
 function fab() {
-  const f = h(`<button class="fab">${ICONS.camera.replace('currentColor', '#3a2a10')}</button>`);
+  const f = h(`<button class="fab" data-help="new-capture">${ICONS.camera.replace('currentColor', '#3a2a10')}</button>`);
   f.onclick = () => go('capture');
   return f;
 }
@@ -335,7 +334,7 @@ function feedView() {
   wrap.appendChild(h(`
     <div class="locbar">
       <div class="gps">${ICONS.pin.replace('currentColor', '#234E3F')}</div>
-      <div><b>${esc(state.user.neighborhood)}</b><span>Showing places within 1.2 km</span></div>
+      <div><b>${esc(state.user.neighborhood || 'Your area')}</b><span>Showing places near you</span></div>
       <span class="live"></span>
     </div>`));
 
@@ -484,53 +483,123 @@ async function advance(id, action) {
 }
 
 /* ----------------------------------------------------------------- the map */
+// Load the Google Maps JS SDK once, on demand, with the key from /api/auth/config.
+// Returns a promise that resolves to `google.maps` (rejects if no key / load fails).
+let _mapsPromise;
+function loadMaps() {
+  if (_mapsPromise) return _mapsPromise;
+  const key = state.config.mapsApiKey;
+  if (!key) return Promise.reject(new Error('Maps not configured'));
+  _mapsPromise = new Promise((resolve, reject) => {
+    window.__obMapsReady = () => resolve(window.google.maps);
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}`
+          + '&loading=async&callback=__obMapsReady';
+    s.async = true;
+    s.onerror = () => reject(new Error('Maps failed to load'));
+    document.head.appendChild(s);
+  });
+  return _mapsPromise;
+}
+
+/** Turn coordinates into a {placeName, neighborhood} via Google's Geocoder. */
+async function reverseGeocode(lat, lng) {
+  try {
+    const maps = await loadMaps();
+    const { results } = await new maps.Geocoder().geocode({ location: { lat, lng } });
+    if (!results || !results.length) return null;
+    const comps = results.flatMap((r) => r.address_components || []);
+    const pick = (type) => comps.find((c) => c.types.includes(type))?.long_name;
+    const placeName = pick('route') || pick('neighborhood')
+      || results[0].formatted_address?.split(',')[0] || null;
+    const neighborhood = pick('neighborhood') || pick('sublocality') || pick('locality') || null;
+    return { placeName, neighborhood };
+  } catch { return null; }
+}
+
+function youIcon(maps) {
+  return { path: maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#234E3F', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 };
+}
+function pinIcon(maps, good) {
+  return {
+    path: 'M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z',
+    fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2,
+    anchor: new maps.Point(0, 34),
+  };
+}
+
 function mapCard() {
   const card = h(`
     <div class="map-card">
-      <div class="loc"><span class="live"></span>📍 ${esc(state.user.neighborhood)} · within 1.2 km</div>
-      <div class="zoom"><button data-z="in">+</button><button data-z="out">−</button></div>
-      <svg class="map" viewBox="0 0 560 230" xmlns="http://www.w3.org/2000/svg">
-        <rect width="560" height="230" fill="#EDE7D6"/>
-        <path d="M40 40 q60 -22 130 6 q40 60 -10 120 q-90 30 -130 -20 q-20 -60 10 -106z" fill="#D5E2CF"/>
-        <circle cx="95" cy="95" r="5" fill="#9FBF9C"/><circle cx="130" cy="120" r="4" fill="#9FBF9C"/><circle cx="80" cy="135" r="4" fill="#9FBF9C"/>
-        <path d="M0 175 q140 -30 280 6 q160 40 280 0 l0 60 l-560 0z" fill="#BFD6D2"/>
-        <g stroke="#F6F1E4" stroke-width="9" stroke-linecap="round">
-          <path d="M0 60 H560"/><path d="M0 130 H560"/><path d="M210 0 V200"/><path d="M380 0 V200"/><path d="M300 0 V200"/>
-        </g>
-        <g stroke="#E0D8C2" stroke-width="2"><path d="M0 95 H560"/><path d="M110 0 V200"/><path d="M470 0 V200"/></g>
-        <g class="pin-layer"></g>
-        <g class="you-layer"></g>
-      </svg>
+      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || 'Locating…')}</span></div>
+      <div class="gmap"></div>
     </div>`);
+  const el = card.querySelector('.gmap');
+  const nameEl = card.querySelector('.loc-name');
 
-  let span = 0.012;
-  const draw = async () => {
-    try {
-      const { pins, viewer } = await api.get('/api/posts/pins');
-      const center = viewer && viewer.lat != null ? viewer : { lat: state.user.lat, lng: state.user.lng };
-      const layer = card.querySelector('.pin-layer');
-      layer.innerHTML = '';
-      pins.filter((p) => state.stream === undefined || true).forEach((p) => {
-        if (p.lat == null) return;
-        const { x, y } = project(p.lat, p.lng, center, span, 560, 200);
-        const good = p.stream === 'good';
-        const color = good ? '#E2A02E' : '#C0613A';
-        const glyph = good
-          ? '<circle cx="0" cy="14" r="5" fill="#fff"/>'
-          : '<path d="M0 8 v6 M0 18 h.01" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>';
-        const pin = h(`<g class="map-pin" transform="translate(${x.toFixed(0)},${y.toFixed(0)})">
-          <path d="M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z" fill="${color}" stroke="#fff" stroke-width="2"/>${glyph}</g>`);
-        pin.addEventListener('click', () => go(`post/${p.id}`));
-        layer.appendChild(pin);
+  loadMaps().then(async (maps) => {
+    let data = { pins: [], viewer: null };
+    try { data = await api.get('/api/posts/pins'); } catch { /* show base map */ }
+
+    const viewerCenter =
+      data.viewer && data.viewer.lat != null ? { lat: data.viewer.lat, lng: data.viewer.lng }
+      : state.user.lat != null && state.user.lng != null ? { lat: state.user.lat, lng: state.user.lng }
+      : null;
+
+    const map = new maps.Map(el, {
+      center: viewerCenter || { lat: 20, lng: 0 },
+      zoom: viewerCenter ? 15 : 2,
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: 'greedy',
+      clickableIcons: false,
+    });
+
+    // One reusable "you" marker we can move once the real GPS fix arrives.
+    let youMarker = null;
+    const setYou = (pos) => {
+      if (youMarker) youMarker.setPosition(pos);
+      else youMarker = new maps.Marker({ position: pos, map, icon: youIcon(maps), title: 'You', zIndex: 999 });
+    };
+
+    const bounds = new maps.LatLngBounds();
+    if (viewerCenter) { setYou(viewerCenter); bounds.extend(viewerCenter); }
+    data.pins.filter((p) => p.lat != null).forEach((p) => {
+      const m = new maps.Marker({
+        position: { lat: p.lat, lng: p.lng }, map,
+        icon: pinIcon(maps, p.stream === 'good'), title: p.title || '',
       });
-      const yl = card.querySelector('.you-layer');
-      const me = project(center.lat, center.lng, center, span, 560, 200);
-      yl.innerHTML = `<g transform="translate(${me.x.toFixed(0)},${me.y.toFixed(0)})"><circle r="9" fill="#3FAE6B" opacity=".25"/><circle r="5" fill="#234E3F" stroke="#fff" stroke-width="2"/></g>`;
-    } catch { /* leave decorative map */ }
-  };
-  card.querySelector('[data-z="in"]').onclick = () => { span = Math.max(0.003, span / 1.5); draw(); };
-  card.querySelector('[data-z="out"]').onclick = () => { span = Math.min(0.05, span * 1.5); draw(); };
-  draw();
+      m.addListener('click', () => go(`post/${p.id}`));
+      bounds.extend({ lat: p.lat, lng: p.lng });
+    });
+
+    // Frame everything, but never zoom in too far on a lone pin.
+    if (data.pins.length && !bounds.isEmpty()) {
+      map.fitBounds(bounds, 64);
+      maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
+    }
+
+    // Ask the browser for the real location, then recentre on it and persist it
+    // (so the stale profile default — e.g. the old Shanghai coords — is replaced).
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setYou(here);
+        // Don't yank the view away from real pins; recentre only when none are framed.
+        if (!data.pins.length) { map.setCenter(here); if (map.getZoom() < 14) map.setZoom(15); }
+        const geo = await reverseGeocode(here.lat, here.lng);
+        if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
+        api.put('/api/auth/me/location', { ...here, neighborhood: geo?.neighborhood || null })
+          .then(({ user }) => { state.user = user; }).catch(() => {});
+      }, () => { /* permission denied → keep profile location */ },
+      { enableHighAccuracy: true, timeout: 8000 });
+    }
+  }).catch(() => {
+    el.innerHTML =
+      '<div class="map-fallback"><b>Map unavailable</b>' +
+      '<span>Set a Google Maps API key (MAPS_API_KEY) to enable the live map.</span></div>';
+  });
+
   return card;
 }
 
@@ -597,7 +666,7 @@ function renderLoopSteps(steps) {
 
 /* --------------------------------------------------------------- capture */
 function captureView() {
-  const draft = { stream: 'care', mode: 'photo', file: null, mediaUrl: null, mediaType: 'photo', coords: null, place: '' };
+  const draft = { stream: 'care', mode: 'photo', file: null, mediaUrl: null, mediaType: 'photo', coords: null, place: '', neighborhood: null };
   const wrap = h(`<div class="capture-view"></div>`);
 
   wrap.appendChild(h(`<div class="back-link">‹ Back to feed</div>`)).onclick = () => history.back();
@@ -663,19 +732,27 @@ function captureView() {
     submit.disabled = !titleInput.value.trim();
   }
 
-  // geolocation
-  const setPlace = (txt) => { vf.querySelector('.loc-text').textContent = txt; draft.place = txt; };
+  // geolocation → reverse-geocode the real GPS into a street / neighbourhood name
+  const showLoc = (txt) => { vf.querySelector('.loc-text').textContent = txt; };
+  const onCoords = async (lat, lng) => {
+    draft.coords = { lat, lng };
+    showLoc('Locating…');
+    const geo = await reverseGeocode(lat, lng);
+    draft.place = geo?.placeName || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    draft.neighborhood = geo?.neighborhood || null;
+    showLoc(draft.place);
+    // Persist the freshest location (and resolved neighbourhood) on the profile.
+    api.put('/api/auth/me/location', { lat, lng, neighborhood: draft.neighborhood })
+      .then(({ user }) => { state.user = user; }).catch(() => {});
+  };
   if (navigator.geolocation) {
+    showLoc('Locating…');
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        draft.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setPlace(`Auto-tagged · ${draft.coords.lat.toFixed(4)}, ${draft.coords.lng.toFixed(4)}`);
-        api.put('/api/auth/me/location', draft.coords).then(({ user }) => { state.user = user; }).catch(() => {});
-      },
-      () => setPlace(`Auto-tagged · ${state.user.neighborhood}`),
+      (pos) => onCoords(pos.coords.latitude, pos.coords.longitude),
+      () => showLoc(state.user.neighborhood || 'Location unavailable'),
       { enableHighAccuracy: true, timeout: 6000 }
     );
-  } else setPlace(`Auto-tagged · ${state.user.neighborhood}`);
+  } else showLoc(state.user.neighborhood || 'Location unavailable');
 
   submit.onclick = async () => {
     submit.disabled = true; submit.textContent = 'Posting…';
@@ -693,7 +770,7 @@ function captureView() {
         durationS: mediaType === 'video' ? 14 : null,
         lat: draft.coords?.lat ?? state.user.lat,
         lng: draft.coords?.lng ?? state.user.lng,
-        placeName: draft.place || state.user.neighborhood,
+        placeName: draft.place || state.user.neighborhood || null,
       });
       // show what the AI decided
       const ai = form.querySelector('.ai-preview');
