@@ -14,7 +14,6 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import crypto from 'crypto';
-import { requireAuth } from '../auth.js';
 import store from '../store/gcs.js';
 
 const MEDIA_PREFIX = 'media/';
@@ -31,7 +30,10 @@ const upload = multer({
 
 const router = express.Router();
 
-router.post('/', requireAuth, (req, res) => {
+// Open to guests so anonymous "The Good" posts can include a photo. (Abuse surface:
+// unauthenticated writes to GCS — bound by the 60 MB / image-or-video filter; add a
+// rate limit or per-IP cap before exposing this publicly at scale.)
+router.post('/', (req, res) => {
   upload.single('media')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file received.' });

@@ -88,10 +88,21 @@ t('me returns the logged-in user', async () => {
   assert.equal(data.user.email, 'test@block.org');
 });
 
-t('creating a post requires auth', async () => {
+t('care needs auth; good can be anonymous with location', async () => {
   const saved = cookie; cookie = null;
-  const { status } = await req('POST', '/api/posts', { stream: 'good', title: 'x' });
-  assert.equal(status, 401);
+  // "Needs Care" always requires a signed-in neighbour.
+  let r = await req('POST', '/api/posts', { stream: 'care', title: 'x', lat: 1, lng: 2 });
+  assert.equal(r.status, 401);
+  // "The Good" may be posted anonymously, but only with a location AND a photo.
+  r = await req('POST', '/api/posts', { stream: 'good', title: 'x', mediaUrl: '/api/media/x.png' });
+  assert.equal(r.status, 400, 'anonymous good without location is rejected');
+  r = await req('POST', '/api/posts', { stream: 'good', title: 'No pic', lat: 1.30, lng: 103.85 });
+  assert.equal(r.status, 400, 'a photo is required as evidence');
+  r = await req('POST', '/api/posts', {
+    stream: 'good', title: 'Anon good thing', lat: 1.30, lng: 103.85, mediaType: 'photo', mediaUrl: '/api/media/x.png',
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.post.author.name, 'A neighbour');
   cookie = saved;
 });
 
@@ -100,6 +111,7 @@ let goodId, careCityId;
 t('AI routes a Good post to "self"', async () => {
   const { status, data } = await req('POST', '/api/posts', {
     stream: 'good', title: 'Corner garden is blooming', lat: 31.23, lng: 121.47, placeName: 'Yuyuan Rd',
+    mediaType: 'photo', mediaUrl: '/api/media/x.png',
   });
   assert.equal(status, 201);
   assert.equal(data.post.stream, 'good');
@@ -109,7 +121,8 @@ t('AI routes a Good post to "self"', async () => {
 
 t('AI routes a broken streetlight to "city" and seeds a loop step', async () => {
   const { data } = await req('POST', '/api/posts', {
-    stream: 'care', title: 'Streetlight out by the crossing', body: 'the lamp is dark', placeName: 'Changping Rd',
+    stream: 'care', title: 'Streetlight out by the crossing', body: 'the lamp is dark',
+    lat: 31.231, lng: 121.472, placeName: 'Changping Rd', mediaType: 'photo', mediaUrl: '/api/media/x.png',
   });
   assert.equal(data.post.ai.action, 'city');
   assert.equal(data.post.loop.length, 1, 'a city-routed care item starts the loop');

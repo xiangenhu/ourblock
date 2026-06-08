@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" width="640" height="420" role="img" aria-label="A morning market on the lane">
+  <defs>
+    <linearGradient id="g2sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBF3E2"/><stop offset="1" stop-color="#F3E6CF"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="420" fill="url(#g2sky)"/>
+  <circle cx="90" cy="78" r="40" fill="#E2A02E" opacity=".3"/>
+  <!-- lane -->
+  <rect y="320" width="640" height="100" fill="#E0D3B8"/>
+  <path d="M0 320 L640 320 L520 420 L120 420 Z" fill="#EDE6D6"/>
+  <!-- stalls with striped awnings -->
+  <g>
+    <rect x="60" y="190" width="150" height="130" fill="#CBB892"/>
+    <rect x="50" y="168" width="170" height="30" rx="6" fill="#C0613A"/>
+    <g fill="#F4EFE4"><rect x="62" y="168" width="20" height="30"/><rect x="102" y="168" width="20" height="30"/><rect x="142" y="168" width="20" height="30"/><rect x="182" y="168" width="20" height="30"/></g>
+    <rect x="250" y="200" width="150" height="120" fill="#CBB892"/>
+    <rect x="240" y="178" width="170" height="30" rx="6" fill="#234E3F"/>
+    <g fill="#F4EFE4"><rect x="252" y="178" width="20" height="30"/><rect x="292" y="178" width="20" height="30"/><rect x="332" y="178" width="20" height="30"/><rect x="372" y="178" width="20" height="30"/></g>
+    <rect x="440" y="190" width="150" height="130" fill="#CBB892"/>
+    <rect x="430" y="168" width="170" height="30" rx="6" fill="#E2A02E"/>
+    <g fill="#F4EFE4"><rect x="442" y="168" width="20" height="30"/><rect x="482" y="168" width="20" height="30"/><rect x="522" y="168" width="20" height="30"/><rect x="562" y="168" width="20" height="30"/></g>
+  </g>
+  <!-- produce baskets -->
+  <g>
+    <ellipse cx="110" cy="320" rx="26" ry="12" fill="#9A7647"/><circle cx="100" cy="312" r="6" fill="#C0613A"/><circle cx="114" cy="310" r="6" fill="#E2A02E"/><circle cx="122" cy="314" r="6" fill="#3FAE6B"/>
+    <ellipse cx="320" cy="320" rx="26" ry="12" fill="#9A7647"/><circle cx="310" cy="312" r="6" fill="#3FAE6B"/><circle cx="324" cy="310" r="6" fill="#D9648E"/><circle cx="332" cy="314" r="6" fill="#E2A02E"/>
+    <ellipse cx="515" cy="320" rx="26" ry="12" fill="#9A7647"/><circle cx="505" cy="312" r="6" fill="#E2A02E"/><circle cx="519" cy="310" r="6" fill="#C0613A"/><circle cx="527" cy="314" r="6" fill="#3FAE6B"/>
+  </g>
+</svg>
