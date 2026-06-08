@@ -11,6 +11,7 @@ import postRoutes from './routes/posts.js';
 import uploadRoutes, { mediaRouter } from './routes/upload.js';
 import statsRoutes from './routes/stats.js';
 import aiRoutes from './routes/ai.js';
+import mapsRoutes from './routes/maps.js';
 import healthRouter from './routes/health.js';
 import helpRoutes from './routes/help.js';
 import ttsRoutes from './routes/tts.js';
@@ -30,6 +31,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/ai', aiRoutes); // POST /api/ai/describe — vision title/description for a photo
+app.use('/api/maps', mapsRoutes); // self-hosted map tiles + reverse geocoding proxy
 app.use('/api/media', mediaRouter); // GET /api/media/<file> — streams from GCS
 app.use('/api/health', healthRouter);
 // Contextual help — public ask/tts (used on pre-sign-in pages) + Admin-only analytics.

@@ -315,54 +315,40 @@ function landingMap(samples) {
   const el = card.querySelector('.gmap');
   const nameEl = card.querySelector('.loc-name');
 
-  loadMaps().then(async (maps) => {
+  getEngine().then(async ({ create }) => {
     const first = samples[0];
     let real = [];
     try { real = (await api.get('/api/posts/pins')).pins || []; } catch { /* offline */ }
 
-    const map = new maps.Map(el, {
-      center: first ? { lat: first.lat, lng: first.lng } : { lat: 20, lng: 0 },
-      zoom: first ? 14 : 2,
-      disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy', clickableIcons: false,
-    });
+    const M = create(el, first ? [first.lat, first.lng] : [20, 0], first ? 14 : 2);
 
-    const markers = [];
+    let pins = [];
+    let youM = null;
     const place = (origin) => {
-      markers.forEach((m) => m.setMap(null));
-      markers.length = 0;
-      const bounds = new maps.LatLngBounds();
-      const add = (lat, lng, good, id) => {
-        const m = new maps.Marker({ position: { lat, lng }, map, icon: pinIcon(maps, good) });
-        m.addListener('click', () => go(`post/${id}`));
-        markers.push(m); bounds.extend({ lat, lng });
-      };
+      pins.forEach((m) => M.remove(m)); pins = [];
+      const bounds = [];
+      const add = (lat, lng, good, id) => { pins.push(M.addPin(lat, lng, good, () => go(`post/${id}`))); bounds.push([lat, lng]); };
       // Place sample pins near the visitor when we know where they are.
       samples.forEach((s) => {
-        const lat = origin && s.offset ? origin.lat + s.offset.dLat : s.lat;
-        const lng = origin && s.offset ? origin.lng + s.offset.dLng : s.lng;
+        const lat = origin && s.offset ? origin[0] + s.offset.dLat : s.lat;
+        const lng = origin && s.offset ? origin[1] + s.offset.dLng : s.lng;
         add(lat, lng, s.stream === 'good', s.id);
       });
       real.filter((p) => p.lat != null).forEach((p) => add(p.lat, p.lng, p.stream === 'good', p.id));
-      if (origin) { new maps.Marker({ position: origin, map, icon: youIcon(maps), title: 'You', zIndex: 999 }); bounds.extend(origin); }
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, 48);
-        maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
-      }
+      if (origin) { if (youM) M.move(youM, origin[0], origin[1]); else youM = M.addYou(origin[0], origin[1]); bounds.push(origin); }
+      M.fit(bounds, 16);
     };
     place(null);
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const here = [pos.coords.latitude, pos.coords.longitude];
         place(here);
-        const geo = await reverseGeocode(here.lat, here.lng);
+        const geo = await reverseGeocode(here[0], here[1]);
         if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
       }, () => { /* keep sample view */ }, { enableHighAccuracy: true, timeout: 8000 });
     }
-  }).catch(() => {
-    el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
-      '<span>Set a Google Maps API key (MAPS_API_KEY) to enable the live map.</span></div>';
-  });
+  }).catch(() => mapFallback(el));
 
   return card;
 }
@@ -494,17 +480,10 @@ function detailMap(p) {
   if (p.lat == null || p.lng == null) return null;
   const card = h(`<div class="map-card detail-map"><div class="gmap"></div></div>`);
   const el = card.querySelector('.gmap');
-  loadMaps().then((maps) => {
-    const center = { lat: p.lat, lng: p.lng };
-    const map = new maps.Map(el, {
-      center, zoom: 16, disableDefaultUI: true, zoomControl: true,
-      gestureHandling: 'greedy', clickableIcons: false,
-    });
-    new maps.Marker({ position: center, map, icon: pinIcon(maps, p.stream === 'good') });
-  }).catch(() => {
-    el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
-      '<span>Set a Google Maps API key to enable the map.</span></div>';
-  });
+  getEngine().then(({ create }) => {
+    const M = create(el, [p.lat, p.lng], 16);
+    M.addPin(p.lat, p.lng, p.stream === 'good');
+  }).catch(() => mapFallback(el));
   return card;
 }
 
@@ -855,50 +834,106 @@ async function advance(id, action) {
 }
 
 /* ----------------------------------------------------------------- the map */
-// Load the Google Maps JS SDK once, on demand, with the key from /api/auth/config.
-// Returns a promise that resolves to `google.maps` (rejects if no key / load fails).
-let _mapsPromise;
-function loadMaps() {
-  if (_mapsPromise) return _mapsPromise;
-  const key = state.config.mapsApiKey;
-  if (!key) return Promise.reject(new Error('Maps not configured'));
-  _mapsPromise = new Promise((resolve, reject) => {
-    window.__obMapsReady = () => resolve(window.google.maps);
+// Hybrid maps. The app picks a provider once per session: Google Maps when it loads
+// (and the region isn't known to block it), otherwise self-hosted Leaflet with tiles
+// proxied through OUR server (/api/maps/tiles/...). Both expose the same tiny engine
+// interface so the three map views below are provider-agnostic. Reverse geocoding always
+// goes through our server, so it works regardless of provider.
+
+const GOOGLE_BLOCKED = new Set(['CN']); // mainland China — Google Maps JS is unreachable
+
+let _googlePromise;
+function loadGoogle(key, timeoutMs = 4000) {
+  if (_googlePromise) return _googlePromise;
+  _googlePromise = new Promise((resolve, reject) => {
+    const to = setTimeout(() => reject(new Error('google maps timeout')), timeoutMs);
+    window.__obMapsReady = () => { clearTimeout(to); resolve(window.google.maps); };
     const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}`
-          + '&loading=async&callback=__obMapsReady';
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=__obMapsReady`;
     s.async = true;
-    s.onerror = () => reject(new Error('Maps failed to load'));
+    s.onerror = () => { clearTimeout(to); reject(new Error('google maps failed')); };
     document.head.appendChild(s);
   });
-  return _mapsPromise;
+  return _googlePromise;
+}
+function leafletReady() {
+  if (window.L) return Promise.resolve(window.L);
+  return new Promise((resolve, reject) => {
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.L) { clearInterval(t); resolve(window.L); }
+      else if (++n > 60) { clearInterval(t); reject(new Error('Leaflet failed to load')); }
+    }, 50);
+  });
 }
 
-/** Turn coordinates into a {placeName, neighborhood} via Google's Geocoder. */
+// ── engine adapters — same interface, two backends ───────────────────────────
+const googleEngine = (g) => (el, center, zoom) => {
+  const map = new g.Map(el, {
+    center: { lat: center[0], lng: center[1] }, zoom,
+    disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy', clickableIcons: false,
+  });
+  const youIcon = { path: g.SymbolPath.CIRCLE, scale: 7, fillColor: '#234E3F', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 };
+  const pinIcon = (good) => ({
+    path: 'M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z',
+    fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2, anchor: new g.Point(0, 34),
+  });
+  return {
+    addPin: (lat, lng, good, onClick) => { const m = new g.Marker({ position: { lat, lng }, map, icon: pinIcon(good) }); if (onClick) m.addListener('click', onClick); return m; },
+    addYou: (lat, lng) => new g.Marker({ position: { lat, lng }, map, icon: youIcon, zIndex: 999 }),
+    move: (m, lat, lng) => m.setPosition({ lat, lng }),
+    remove: (m) => m.setMap(null),
+    fit: (pts, maxZoom) => { if (!pts.length) return; const b = new g.LatLngBounds(); pts.forEach((p) => b.extend({ lat: p[0], lng: p[1] })); map.fitBounds(b, 48); g.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > maxZoom) map.setZoom(maxZoom); }); },
+    view: (c, z) => { map.setCenter({ lat: c[0], lng: c[1] }); map.setZoom(z); },
+    zoom: () => map.getZoom(),
+  };
+};
+const leafletEngine = (L) => (el, center, zoom) => {
+  const map = L.map(el, { zoomControl: true }).setView(center, zoom);
+  L.tileLayer('/api/maps/tiles/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+  setTimeout(() => map.invalidateSize(), 60); // container may have sized after init
+  const youStyle = { radius: 7, color: '#fff', weight: 3, fillColor: '#234E3F', fillOpacity: 1 };
+  const pinStyle = (good) => ({ radius: 8, color: '#fff', weight: 2, fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1 });
+  return {
+    addPin: (lat, lng, good, onClick) => { const m = L.circleMarker([lat, lng], pinStyle(good)).addTo(map); if (onClick) m.on('click', onClick); return m; },
+    addYou: (lat, lng) => L.circleMarker([lat, lng], youStyle).addTo(map),
+    move: (m, lat, lng) => m.setLatLng([lat, lng]),
+    remove: (m) => map.removeLayer(m),
+    fit: (pts, maxZoom) => { if (pts.length) map.fitBounds(pts, { padding: [35, 35], maxZoom }); },
+    view: (c, z) => map.setView(c, z),
+    zoom: () => map.getZoom(),
+  };
+};
+
+// Choose a provider once per session: Google when reachable + allowed, else Leaflet.
+let _enginePromise;
+function getEngine() {
+  if (_enginePromise) return _enginePromise;
+  _enginePromise = (async () => {
+    const { mapsApiKey: key, country = '', mapProvider = 'auto' } = state.config || {};
+    const allowGoogle = key && mapProvider !== 'leaflet' &&
+      (mapProvider === 'google' || !GOOGLE_BLOCKED.has(country.toUpperCase()));
+    if (allowGoogle) {
+      try { return { create: googleEngine(await loadGoogle(key)), kind: 'google' }; }
+      catch { /* blocked or slow (e.g. China) → fall back to self-hosted Leaflet */ }
+    }
+    return { create: leafletEngine(await leafletReady()), kind: 'leaflet' };
+  })();
+  return _enginePromise;
+}
+
+/** Reverse geocode a point via our server (works regardless of map provider). */
 async function reverseGeocode(lat, lng) {
   try {
-    const maps = await loadMaps();
-    const { results } = await new maps.Geocoder().geocode({ location: { lat, lng } });
-    if (!results || !results.length) return null;
-    const comps = results.flatMap((r) => r.address_components || []);
-    const pick = (type) => comps.find((c) => c.types.includes(type))?.long_name;
-    const placeName = pick('route') || pick('neighborhood')
-      || results[0].formatted_address?.split(',')[0] || null;
-    const neighborhood = pick('neighborhood') || pick('sublocality') || pick('locality') || null;
-    return { placeName, neighborhood };
+    const r = await api.get(`/api/maps/geocode/reverse?lat=${lat}&lng=${lng}`);
+    return { placeName: r.placeName || null, neighborhood: r.neighborhood || null };
   } catch { return null; }
 }
 
-function youIcon(maps) {
-  return { path: maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#234E3F', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 };
-}
-function pinIcon(maps, good) {
-  return {
-    path: 'M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z',
-    fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2,
-    anchor: new maps.Point(0, 34),
-  };
-}
+const mapFallback = (el) => {
+  el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
+    '<span>The map service could not be reached.</span></div>';
+};
 
 function mapCard(streamFilter) {
   const card = h(`
@@ -909,70 +944,44 @@ function mapCard(streamFilter) {
   const el = card.querySelector('.gmap');
   const nameEl = card.querySelector('.loc-name');
 
-  loadMaps().then(async (maps) => {
+  getEngine().then(async ({ create }) => {
     let data = { pins: [], viewer: null };
     try { data = await api.get('/api/posts/pins'); } catch { /* show base map */ }
     // On the Good/Care views, show only that stream's pins; on Near Me, show all.
     const pins = streamFilter ? data.pins.filter((p) => p.stream === streamFilter) : data.pins;
 
     const viewerCenter =
-      data.viewer && data.viewer.lat != null ? { lat: data.viewer.lat, lng: data.viewer.lng }
-      : state.user.lat != null && state.user.lng != null ? { lat: state.user.lat, lng: state.user.lng }
+      data.viewer && data.viewer.lat != null ? [data.viewer.lat, data.viewer.lng]
+      : state.user.lat != null && state.user.lng != null ? [state.user.lat, state.user.lng]
       : null;
 
-    const map = new maps.Map(el, {
-      center: viewerCenter || { lat: 20, lng: 0 },
-      zoom: viewerCenter ? 15 : 2,
-      disableDefaultUI: true,
-      zoomControl: true,
-      gestureHandling: 'greedy',
-      clickableIcons: false,
-    });
+    const M = create(el, viewerCenter || [20, 0], viewerCenter ? 15 : 2);
 
-    // One reusable "you" marker we can move once the real GPS fix arrives.
-    let youMarker = null;
-    const setYou = (pos) => {
-      if (youMarker) youMarker.setPosition(pos);
-      else youMarker = new maps.Marker({ position: pos, map, icon: youIcon(maps), title: 'You', zIndex: 999 });
-    };
+    let youM = null;
+    const setYou = (c) => { if (youM) M.move(youM, c[0], c[1]); else youM = M.addYou(c[0], c[1]); };
 
-    const bounds = new maps.LatLngBounds();
-    if (viewerCenter) { setYou(viewerCenter); bounds.extend(viewerCenter); }
+    const bounds = [];
+    if (viewerCenter) { setYou(viewerCenter); bounds.push(viewerCenter); }
     pins.filter((p) => p.lat != null).forEach((p) => {
-      const m = new maps.Marker({
-        position: { lat: p.lat, lng: p.lng }, map,
-        icon: pinIcon(maps, p.stream === 'good'), title: p.title || '',
-      });
-      m.addListener('click', () => go(`post/${p.id}`));
-      bounds.extend({ lat: p.lat, lng: p.lng });
+      M.addPin(p.lat, p.lng, p.stream === 'good', () => go(`post/${p.id}`));
+      bounds.push([p.lat, p.lng]);
     });
+    if (pins.length) M.fit(bounds, 16);
 
-    // Frame everything, but never zoom in too far on a lone pin.
-    if (pins.length && !bounds.isEmpty()) {
-      map.fitBounds(bounds, 64);
-      maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
-    }
-
-    // Ask the browser for the real location, then recentre on it and persist it
-    // (so the stale profile default — e.g. the old Shanghai coords — is replaced).
+    // Ask the browser for the real location, recentre on it and persist it.
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const here = [pos.coords.latitude, pos.coords.longitude];
         setYou(here);
-        // Don't yank the view away from real pins; recentre only when none are framed.
-        if (!data.pins.length) { map.setCenter(here); if (map.getZoom() < 14) map.setZoom(15); }
-        const geo = await reverseGeocode(here.lat, here.lng);
+        if (!pins.length) M.view(here, Math.max(M.zoom(), 15)); // don't yank away from pins
+        const geo = await reverseGeocode(here[0], here[1]);
         if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
-        api.put('/api/auth/me/location', { ...here, neighborhood: geo?.neighborhood || null })
+        api.put('/api/auth/me/location', { lat: here[0], lng: here[1], neighborhood: geo?.neighborhood || null })
           .then(({ user }) => { state.user = user; }).catch(() => {});
       }, () => { /* permission denied → keep profile location */ },
       { enableHighAccuracy: true, timeout: 8000 });
     }
-  }).catch(() => {
-    el.innerHTML =
-      '<div class="map-fallback"><b>Map unavailable</b>' +
-      '<span>Set a Google Maps API key (MAPS_API_KEY) to enable the live map.</span></div>';
-  });
+  }).catch(() => mapFallback(el));
 
   return card;
 }

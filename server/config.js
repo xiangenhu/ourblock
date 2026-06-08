@@ -85,9 +85,18 @@ const llm = {
   vendors: VENDORS,
 };
 
-// ── Google Maps (browser SDK + Geocoding; one referrer-restricted public key) ─
+// ── Maps (hybrid: Google where reachable, self-hosted Leaflet where blocked) ──
+// provider 'auto' (default): the browser uses Google Maps when it loads (and the region
+// isn't known to block it) and otherwise falls back to Leaflet with tiles proxied through
+// OUR server (routes/maps.js) — so the map works in mainland China. Force one with
+// MAP_PROVIDER=google|leaflet. Tiles + reverse geocoding always go through the server, so
+// the browser never needs to reach OSM/Nominatim directly either.
 const maps = {
-  apiKey: env.MAPS_API_KEY || '',
+  provider: (env.MAP_PROVIDER || 'auto').toLowerCase(), // auto | google | leaflet
+  apiKey: env.MAPS_API_KEY || '',                       // Google JS key (used when reachable)
+  tileUrl: env.MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  geocodeUrl: env.MAP_GEOCODE_URL || 'https://nominatim.openstreetmap.org/reverse',
+  userAgent: env.MAP_USER_AGENT || 'OurBlock/1.0 (civic wellbeing app)',
 };
 
 // ── Misc ─────────────────────────────────────────────────────────────────────
@@ -133,7 +142,7 @@ config.has = {
   gcs: () => !!gcs.bucket,
   llm: () => !!(llm.vendors[llm.vendor] && llm.vendors[llm.vendor].apiKey),
   lrs: () => !!(lrs.endpoint && lrs.username && lrs.password),
-  maps: () => !!maps.apiKey,
+  maps: () => !!maps.tileUrl, // always on — tiles are proxied through our own server
 };
 
 config.bool = bool;

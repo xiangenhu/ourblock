@@ -94,15 +94,21 @@ function startSession(res, user) {
 }
 
 /* ───────────────────────────── client config ──────────────────────────── */
-// Lets the SPA know whether to show the Google button and the gateway flows.
-router.get('/config', (_req, res) => {
+// Lets the SPA know auth flows + which map provider to use. `country` is a best-effort
+// hint from edge/CDN geo headers (empty in dev); the client also probes Google directly.
+router.get('/config', (req, res) => {
+  const country = (
+    req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] ||
+    req.headers['x-appengine-country'] || req.headers['x-country-code'] || ''
+  ).toString().toUpperCase();
   res.json({
     googleEnabled: oauthGateway.enabled,
     gatewayEnabled: oauthGateway.enabled,
     gatewayUrl: oauthGateway.url,
-    // Browser Maps key (referrer-restricted, public by design). Empty → the SPA
-    // shows a "map unavailable" placeholder instead of the live map.
-    mapsApiKey: config.maps.apiKey,
+    // Maps: provider selection happens client-side (probe + this hint).
+    mapProvider: config.maps.provider,   // auto | google | leaflet
+    mapsApiKey: config.maps.apiKey,       // Google JS key (referrer-restricted, public)
+    country,                              // e.g. "CN" → skip Google, use Leaflet
   });
 });
 

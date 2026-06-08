@@ -9,10 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
   <div id="app"><div class="spinner"></div></div>
+  <!-- Leaflet (self-hosted) — classic script runs before the deferred module, so window.L is ready. -->
+  <script src="/vendor/leaflet/leaflet.js"></script>
   <script type="module" src="/js/app.js"></script>
   <!-- App-wide contextual "?" help — idempotent IIFE, works on public + authed views. -->
   <script src="/contextual-help.js?v=1"></script>
