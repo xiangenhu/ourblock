@@ -1,0 +1,29 @@
+# Dependencies — reinstalled in the image via `npm ci`
+node_modules
+
+# Secrets — never bake credentials into the image (use Cloud Run ADC + env vars)
+.env
+.env.*
+!.env.example
+*-key.json
+server/gcs-key.json
+
+# Local runtime data & uploads (persistence is GCS in production)
+data
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Dev / VCS / CI noise
+.git
+.github
+.claude
+test
+docs
+*.log
+npm-debug.log*
+coverage
+.nyc_output
+README.md
+LICENSE
+Dockerfile
+.dockerignore

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>优城美市 · Our Block — Interface Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4EFE4;
+    --paper-2:#EDE6D6;
+    --card:#FFFFFF;
+    --ink:#20251F;
+    --ink-soft:#5C6157;
+    --line:#E2DAC8;
+    --green:#234E3F;        /* civic primary */
+    --green-2:#2F6552;
+    --green-tint:#E4EDE6;
+    --good:#E2A02E;         /* marigold — "The Good" */
+    --good-tint:#FBEFD3;
+    --care:#C0613A;         /* clay — "Needs Care" */
+    --care-tint:#F6E1D5;
+    --water:#BFD6D2;
+    --shadow:0 18px 40px -22px rgba(35,40,30,.45);
+    --shadow-sm:0 8px 20px -14px rgba(35,40,30,.5);
+    --r:18px;
+    --display:'Bricolage Grotesque', 'Noto Sans SC', sans-serif;
+    --body:'Hanken Grotesk', 'Noto Sans SC', sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:var(--body); color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 12% -8%, #FBF6EC 0%, transparent 55%),
+      radial-gradient(900px 700px at 110% 0%, #EFEAD9 0%, transparent 50%),
+      var(--paper);
+    min-height:100vh; padding:42px 26px 70px; -webkit-font-smoothing:antialiased;
+  }
+  .stage{max-width:1180px;margin:0 auto}
+
+  /* ---------- page header ---------- */
+  .page-head{margin-bottom:30px;opacity:0;animation:rise .7s .05s forwards}
+  .kicker{font-family:var(--display);font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:11px;color:var(--green-2)}
+  .page-head h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.4vw,40px);line-height:1.04;margin:8px 0 6px;letter-spacing:-.01em}
+  .page-head h1 .cjk{font-family:'Noto Sans SC',var(--display)}
+  .page-head p{max-width:640px;color:var(--ink-soft);font-size:15px;line-height:1.55}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:99px;border:1px solid var(--line);background:var(--card)}
+  .dot{width:9px;height:9px;border-radius:99px}
+  .dot.g{background:var(--good)} .dot.c{background:var(--care)} .dot.v{background:var(--green)}
+
+  /* ---------- layout of the two showcases ---------- */
+  .frames{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+  .col-desktop{flex:1 1 600px;min-width:340px}
+  .col-mobile{flex:0 0 auto;display:flex;gap:26px;flex-wrap:wrap}
+  .frame-label{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:12px;display:flex;align-items:center;gap:9px}
+  .frame-label .num{font-size:11px;background:var(--green);color:#fff;border-radius:6px;padding:2px 7px}
+
+  /* annotation markers */
+  .anno{position:absolute;z-index:6;width:22px;height:22px;border-radius:99px;background:var(--green);color:#fff;font-family:var(--display);font-weight:700;font-size:12px;display:grid;place-items:center;box-shadow:0 4px 10px -3px rgba(35,40,30,.6);border:2px solid var(--paper)}
+
+  /* ====================================================== DESKTOP MOCK */
+  .browser{background:var(--card);border-radius:16px;box-shadow:var(--shadow);border:1px solid var(--line);overflow:hidden;opacity:0;animation:rise .8s .15s forwards}
+  .bbar{display:flex;align-items:center;gap:8px;padding:11px 14px;background:linear-gradient(var(--paper-2),var(--paper));border-bottom:1px solid var(--line)}
+  .traffic{display:flex;gap:6px}.traffic i{width:11px;height:11px;border-radius:99px;display:block}
+  .traffic i:nth-child(1){background:#E0796B}.traffic i:nth-child(2){background:#E6BE5A}.traffic i:nth-child(3){background:#86B58E}
+  .url{flex:1;background:var(--card);border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--ink-soft);padding:6px 12px;display:flex;align-items:center;gap:8px}
+  .url svg{flex:none}
+
+  .app{display:grid;grid-template-columns:188px 1fr 268px;height:560px;font-size:13px}
+  .rail{background:var(--green);color:#EaF1Ec;padding:18px 14px;display:flex;flex-direction:column;gap:4px}
+  .brand{font-family:var(--display);font-weight:800;font-size:19px;color:#fff;letter-spacing:.01em;line-height:1.05;margin-bottom:2px}
+  .brand small{display:block;font-family:var(--body);font-weight:500;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#9CBBAE;margin-top:5px}
+  .nav-i{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;color:#CBDCD3;font-weight:600;cursor:pointer;transition:.18s}
+  .nav-i svg{width:16px;height:16px;flex:none}
+  .nav-i:hover{background:rgba(255,255,255,.07);color:#fff}
+  .nav-i.on{background:#fff;color:var(--green)}
+  .rail .spacer{flex:1}
+  .me{display:flex;align-items:center;gap:9px;padding-top:12px;border-top:1px solid rgba(255,255,255,.14);margin-top:6px}
+  .me .av{width:30px;height:30px;border-radius:99px;background:linear-gradient(135deg,var(--good),#D98748);display:grid;place-items:center;font-family:var(--display);font-weight:700;color:#3a2a10;font-size:13px}
+  .me b{font-size:12.5px;color:#fff;font-weight:700}.me span{display:block;font-size:10.5px;color:#9CBBAE}
+
+  .main{padding:18px;overflow:auto;background:var(--paper)}
+  .main::-webkit-scrollbar{width:9px}.main::-webkit-scrollbar-thumb{background:#D9D0BE;border-radius:9px}
+  .toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .toprow h2{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:-.01em}
+  .toprow h2 small{display:block;font-family:var(--body);font-weight:500;font-size:11.5px;color:var(--ink-soft);letter-spacing:0}
+  .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+  .seg button{font-family:var(--body);border:0;background:transparent;font-weight:700;font-size:12px;color:var(--ink-soft);padding:6px 12px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s}
+  .seg button.on.good{background:var(--good-tint);color:#7a5410}
+  .seg button.on.care{background:var(--care-tint);color:#8a3c1c}
+
+  /* map */
+  .map-card{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);margin-bottom:16px;box-shadow:var(--shadow-sm)}
+  .map-card .loc{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.92);backdrop-filter:blur(4px);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .map-card .loc .live{width:8px;height:8px;border-radius:99px;background:#3FAE6B;box-shadow:0 0 0 0 rgba(63,174,107,.6);animation:ping 1.8s infinite}
+  .map-card .zoom{position:absolute;right:10px;bottom:10px;z-index:3;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .map-card .zoom button{border:0;background:transparent;width:30px;height:28px;font-size:16px;cursor:pointer;color:var(--ink)}
+  .map-card .zoom button:first-child{border-bottom:1px solid var(--line)}
+  svg.map{display:block;width:100%;height:auto}
+
+  /* feed cards */
+  .feed{display:grid;gap:13px}
+  .post{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-sm);transition:.2s}
+  .post:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+  .media{height:118px;position:relative;display:flex;align-items:flex-end;padding:9px}
+  .media.g{background:linear-gradient(135deg,#F3D88C,#E2A02E 70%,#cf8e22)}
+  .media.c{background:linear-gradient(135deg,#E7B89C,#C0613A 75%,#a8502d)}
+  .badge{font-size:10.5px;font-weight:700;background:rgba(0,0,0,.42);color:#fff;border-radius:7px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px;backdrop-filter:blur(2px)}
+  .ai-tag{position:absolute;top:9px;right:9px;font-size:10px;font-weight:700;background:rgba(255,255,255,.92);color:var(--green);border-radius:7px;padding:4px 8px;display:inline-flex;gap:5px;align-items:center}
+  .pbody{padding:12px 14px 14px}
+  .pbody h3{font-family:var(--display);font-weight:700;font-size:14.5px;margin-bottom:3px}
+  .pmeta{font-size:11.5px;color:var(--ink-soft);display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .react{display:flex;gap:7px;flex-wrap:wrap}
+  .rbtn{font-family:var(--body);font-weight:700;font-size:11.5px;border:1px solid var(--line);background:var(--paper);border-radius:99px;padding:6px 11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--ink);transition:.15s}
+  .rbtn:hover{border-color:var(--green-2)}
+  .rbtn.act{background:var(--green);color:#fff;border-color:var(--green)}
+  .rbtn.cheer.act{background:var(--good);color:#3a2a10;border-color:var(--good)}
+
+  /* right panel */
+  .side{background:var(--card);border-left:1px solid var(--line);padding:16px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+  .side::-webkit-scrollbar{width:8px}.side::-webkit-scrollbar-thumb{background:#E0D8C6;border-radius:8px}
+  .capture-cta{position:relative;background:linear-gradient(150deg,var(--green-2),var(--green));border-radius:14px;padding:15px;color:#fff;box-shadow:var(--shadow-sm)}
+  .capture-cta b{font-family:var(--display);font-size:15px;display:block;margin-bottom:3px}
+  .capture-cta p{font-size:11.5px;color:#CFE0D7;line-height:1.45;margin-bottom:11px}
+  .cap-row{display:flex;gap:8px}
+  .cap-btn{flex:1;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:10px;padding:9px 6px;font-family:var(--body);font-weight:700;font-size:11.5px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:.15s}
+  .cap-btn:hover{background:rgba(255,255,255,.22)}
+  .cap-btn.solid{background:#fff;color:var(--green)}
+  .panel{border:1px solid var(--line);border-radius:14px;padding:14px}
+  .panel h4{font-family:var(--display);font-weight:700;font-size:12.5px;letter-spacing:.02em;display:flex;align-items:center;gap:7px;margin-bottom:11px}
+  .panel h4 .pin{font-size:10px;background:var(--green-tint);color:var(--green);padding:2px 7px;border-radius:6px;margin-left:auto;font-family:var(--body)}
+  .stat{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+  .stat .n{font-family:var(--display);font-weight:800;font-size:24px;color:var(--green);line-height:1}
+  .stat .l{font-size:11.5px;color:var(--ink-soft)}
+  .bar{height:7px;border-radius:9px;background:var(--paper-2);overflow:hidden;margin:4px 0 3px}
+  .bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,var(--good),#d98a2c)}
+  .ladder{display:flex;flex-direction:column;gap:7px}
+  .rung{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:600;padding:8px 10px;border-radius:10px;background:var(--paper);border:1px solid var(--line)}
+  .rung .k{width:20px;height:20px;border-radius:6px;background:var(--green-tint);color:var(--green);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:11px;flex:none}
+  .rung.hot{background:var(--green-tint);border-color:var(--green-2)}
+  .loopstep{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--ink-soft)}
+  .loopstep .tick{width:16px;height:16px;border-radius:99px;border:2px solid var(--line);flex:none}
+  .loopstep.done .tick{background:var(--green);border-color:var(--green)}
+  .loopstep.done{color:var(--ink)}
+  .loopline{height:14px;width:2px;background:var(--line);margin-left:7px}
+
+  /* ====================================================== PHONE MOCK */
+  .phone{width:300px;background:#1b1f1a;border-radius:42px;padding:9px;box-shadow:var(--shadow);position:relative;opacity:0;animation:rise .85s forwards}
+  .phone.p1{animation-delay:.25s}.phone.p2{animation-delay:.35s}
+  .screen{background:var(--paper);border-radius:34px;overflow:hidden;height:618px;position:relative;display:flex;flex-direction:column}
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:24px;background:#1b1f1a;border-radius:0 0 16px 16px;z-index:20}
+  .statusbar{display:flex;justify-content:space-between;align-items:center;padding:9px 20px 4px;font-size:11px;font-weight:700;color:var(--ink)}
+  .statusbar .ico{display:flex;gap:5px;align-items:center}
+
+  /* phone location bar */
+  .locbar{margin:4px 12px 0;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:8px 11px;display:flex;align-items:center;gap:9px;box-shadow:var(--shadow-sm)}
+  .locbar .gps{width:30px;height:30px;border-radius:9px;background:var(--green-tint);display:grid;place-items:center;flex:none}
+  .locbar b{font-size:12.5px;font-family:var(--display);font-weight:700;display:block}
+  .locbar span{font-size:10.5px;color:var(--ink-soft)}
+  .locbar .live{width:7px;height:7px;border-radius:99px;background:#3FAE6B;box-shadow:0 0 0 0 rgba(63,174,107,.6);animation:ping 1.8s infinite;margin-left:auto;flex:none}
+
+  .pscroll{flex:1;overflow:auto;padding:10px 12px 84px}
+  .pscroll::-webkit-scrollbar{display:none}
+  .pseg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:11px}
+  .pseg button{flex:1;border:0;background:transparent;font-family:var(--body);font-weight:700;font-size:12px;color:var(--ink-soft);padding:8px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+  .pseg button.on.good{background:var(--good-tint);color:#7a5410}
+  .pseg button.on.care{background:var(--care-tint);color:#8a3c1c}
+
+  .pmap{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);margin-bottom:12px}
+  .pmap .miniloc{position:absolute;top:8px;left:8px;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;font-size:10px;font-weight:700;padding:4px 8px;display:flex;gap:6px;align-items:center}
+
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:15px;overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow-sm)}
+  .pmedia{height:140px;position:relative;display:flex;align-items:flex-end;padding:9px}
+  .pmedia.g{background:linear-gradient(135deg,#F3D88C,#E2A02E 70%,#cf8e22)}
+  .pmedia.c{background:linear-gradient(135deg,#E7B89C,#C0613A 75%,#a8502d)}
+  .play{position:absolute;inset:0;margin:auto;width:46px;height:46px;border-radius:99px;background:rgba(0,0,0,.4);display:grid;place-items:center;backdrop-filter:blur(2px)}
+  .pcb{padding:11px 13px 13px}
+  .pcb h3{font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:3px}
+  .pcb .pmeta{font-size:11px}
+  .suggest{background:var(--green-tint);border:1px solid #C9DDD2;border-radius:11px;padding:9px 11px;display:flex;gap:9px;align-items:flex-start;margin:10px 0}
+  .suggest svg{flex:none;margin-top:1px}
+  .suggest b{font-size:11.5px;color:var(--green);font-family:var(--display)}
+  .suggest p{font-size:11px;color:#3c5247;line-height:1.4}
+
+  /* phone bottom nav + FAB */
+  .pnav{position:absolute;bottom:0;left:0;right:0;height:66px;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding:0 8px 8px;z-index:15}
+  .pnav a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9.5px;font-weight:700;color:var(--ink-soft);text-decoration:none}
+  .pnav a.on{color:var(--green)}
+  .pnav a svg{width:20px;height:20px}
+  .fab{position:absolute;bottom:42px;left:50%;transform:translateX(-50%);width:58px;height:58px;border-radius:99px;background:linear-gradient(150deg,var(--good),#d4842c);box-shadow:0 10px 22px -8px rgba(192,97,58,.7);display:grid;place-items:center;z-index:16;border:4px solid var(--paper)}
+
+  /* capture screen (phone 2) */
+  .caphead{display:flex;align-items:center;gap:12px;padding:6px 14px 10px}
+  .caphead .x{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center}
+  .caphead b{font-family:var(--display);font-weight:800;font-size:16px}
+  .viewfinder{margin:0 12px;border-radius:16px;height:230px;position:relative;background:linear-gradient(135deg,#7c8a6f,#4f5d45);overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .viewfinder .grid3{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.18) 1px,transparent 1px);background-size:33.33% 33.33%}
+  .vf-loc{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;border-radius:8px;padding:5px 9px;display:flex;gap:6px;align-items:center}
+  .vf-rec{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px;font-weight:700;border-radius:8px;padding:5px 9px;display:flex;gap:6px;align-items:center}
+  .vf-rec i{width:8px;height:8px;border-radius:99px;background:#ff6b5e;animation:blink 1.1s infinite}
+  .modes{display:flex;justify-content:center;gap:8px;margin:13px 0 4px}
+  .mode{font-family:var(--display);font-weight:700;font-size:12px;color:var(--ink-soft);padding:7px 15px;border-radius:99px;cursor:pointer;border:1px solid transparent}
+  .mode.on{background:var(--card);border-color:var(--line);color:var(--ink);box-shadow:var(--shadow-sm)}
+  .trim{margin:8px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .trim .tl{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;color:var(--ink-soft);font-weight:700;margin-bottom:7px}
+  .trimbar{height:30px;border-radius:8px;background:repeating-linear-gradient(90deg,#cdbf9f,#cdbf9f 3px,#d8cdb1 3px,#d8cdb1 7px);position:relative;overflow:hidden}
+  .trimbar .sel{position:absolute;top:0;bottom:0;left:8%;width:62%;border:2px solid var(--good);border-radius:7px;background:rgba(226,160,46,.18)}
+  .upbtns{display:flex;gap:9px;margin:13px 16px 0}
+  .upbtn{flex:1;border:1px dashed var(--green-2);background:var(--green-tint);color:var(--green);border-radius:12px;padding:11px;font-family:var(--body);font-weight:700;font-size:11.5px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
+  .shoot{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);width:64px;height:64px;border-radius:99px;background:#fff;border:5px solid var(--good);box-shadow:var(--shadow);display:grid;place-items:center;cursor:pointer}
+  .shoot .inner{width:46px;height:46px;border-radius:99px;background:var(--good)}
+
+  /* theory map */
+  .theory{margin-top:42px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:24px 26px;box-shadow:var(--shadow-sm);opacity:0;animation:rise .8s .4s forwards}
+  .theory h3{font-family:var(--display);font-weight:800;font-size:18px;margin-bottom:4px}
+  .theory>p{color:var(--ink-soft);font-size:13.5px;margin-bottom:18px;max-width:680px}
+  .tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .titem{display:flex;gap:12px;align-items:flex-start}
+  .titem .n{width:24px;height:24px;border-radius:8px;background:var(--green);color:#fff;font-family:var(--display);font-weight:700;font-size:12px;display:grid;place-items:center;flex:none;margin-top:1px}
+  .titem b{font-size:13.5px;font-family:var(--display);font-weight:700;display:block;margin-bottom:2px}
+  .titem span{font-size:12px;color:var(--ink-soft);line-height:1.5}
+  .titem em{font-style:normal;color:var(--green-2);font-weight:600}
+
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(63,174,107,.55)}70%{box-shadow:0 0 0 7px rgba(63,174,107,0)}100%{box-shadow:0 0 0 0 rgba(63,174,107,0)}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  @keyframes pinpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+  .pin{transform-origin:center bottom}
+  .pin.pulse{animation:pinpulse 2.4s ease-in-out infinite}
+
+  @media(max-width:560px){
+    body{padding:26px 14px 50px}
+    .app{grid-template-columns:1fr}
+    .rail,.side{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <header class="page-head">
+    <div class="kicker">Interface Mockup · AI-Enhanced Civic Wellbeing App</div>
+    <h1><span class="cjk">优城美市</span> · Our Block</h1>
+    <div style="font-family:var(--display);font-weight:600;color:var(--green-2);font-size:15px;margin:-2px 0 10px;letter-spacing:.01em">Your block, in good hands — together.</div>
+    <p>A place-based app where residents notice what is <strong>good</strong> and flag what <strong>needs care</strong>, then act. Designed as a psychological-empowerment intervention: capture is location-aware on phones, photo and short video document the environment, and AI routes each observation to the lowest viable rung of action.</p>
+    <div class="legend">
+      <span class="chip"><span class="dot g"></span>The Good — savoring & capitalization</span>
+      <span class="chip"><span class="dot c"></span>Needs Care — critical awareness</span>
+      <span class="chip"><span class="dot v"></span>Civic action & impact</span>
+    </div>
+  </header>
+
+  <div class="frames">
+
+    <!-- ============================ DESKTOP ============================ -->
+    <div class="col-desktop">
+      <div class="frame-label"><span class="num">Desktop</span> Web app · resident + community view</div>
+      <div class="browser">
+        <div class="bbar">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="url">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5C6157" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            app.ourblock.org/near-me
+          </div>
+        </div>
+
+        <div class="app">
+          <!-- left rail -->
+          <aside class="rail">
+            <div class="brand">优城美市<small>Our Block</small></div>
+            <div style="height:6px"></div>
+            <div class="nav-i on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.4 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.4 2V6L15 4m0 14V4m-6 0l6 2"/></svg>Near Me</div>
+            <div class="nav-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/></svg>The Good</div>
+            <div class="nav-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>Needs Care</div>
+            <div class="nav-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>My Impact</div>
+            <div class="nav-i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Community</div>
+            <div class="spacer"></div>
+            <div class="me"><div class="av">玲</div><div><b>Ling W.</b><span>Jing'an · Lv. 3 Steward</span></div></div>
+          </aside>
+
+          <!-- center -->
+          <main class="main">
+            <div class="toprow">
+              <h2>Near Me <small>156 places your neighbours are caring for</small></h2>
+              <div class="seg">
+                <button class="on good" onclick="setStream('good',this)">✦ The Good</button>
+                <button class="care" onclick="setStream('care',this)">△ Needs Care</button>
+              </div>
+            </div>
+
+            <!-- MAP -->
+            <div class="map-card">
+              <span class="anno" style="top:-9px;left:-9px">4</span>
+              <div class="loc"><span class="live"></span>📍 Jing'an, Shanghai · within 1.2 km</div>
+              <div class="zoom"><button>+</button><button>−</button></div>
+              <svg class="map" viewBox="0 0 560 230" xmlns="http://www.w3.org/2000/svg">
+                <rect width="560" height="230" fill="#EDE7D6"/>
+                <!-- park -->
+                <path d="M40 40 q60 -22 130 6 q40 60 -10 120 q-90 30 -130 -20 q-20 -60 10 -106z" fill="#D5E2CF"/>
+                <circle cx="95" cy="95" r="5" fill="#9FBF9C"/><circle cx="130" cy="120" r="4" fill="#9FBF9C"/><circle cx="80" cy="135" r="4" fill="#9FBF9C"/>
+                <!-- river -->
+                <path d="M0 175 q140 -30 280 6 q160 40 280 0 l0 60 l-560 0z" fill="#BFD6D2"/>
+                <!-- roads -->
+                <g stroke="#F6F1E4" stroke-width="9" stroke-linecap="round">
+                  <path d="M0 60 H560"/><path d="M0 130 H560"/><path d="M210 0 V200"/><path d="M380 0 V200"/><path d="M300 0 V200"/>
+                </g>
+                <g stroke="#E0D8C2" stroke-width="2">
+                  <path d="M0 95 H560"/><path d="M110 0 V200"/><path d="M470 0 V200"/>
+                </g>
+                <!-- pins: good (marigold) -->
+                <g class="pin pulse" transform="translate(258,52)"><path d="M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z" fill="#E2A02E" stroke="#fff" stroke-width="2"/><circle cx="0" cy="14" r="5" fill="#fff"/></g>
+                <g class="pin" transform="translate(150,150)"><path d="M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z" fill="#E2A02E" stroke="#fff" stroke-width="2"/><circle cx="0" cy="14" r="5" fill="#fff"/></g>
+                <g class="pin" transform="translate(440,75)"><path d="M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z" fill="#E2A02E" stroke="#fff" stroke-width="2"/><circle cx="0" cy="14" r="5" fill="#fff"/></g>
+                <!-- pins: care (clay) -->
+                <g class="pin" transform="translate(330,108)"><path d="M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z" fill="#C0613A" stroke="#fff" stroke-width="2"/><path d="M0 8 v6 M0 18 h.01" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></g>
+                <g class="pin pulse" transform="translate(395,158)"><path d="M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z" fill="#C0613A" stroke="#fff" stroke-width="2"/><path d="M0 8 v6 M0 18 h.01" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></g>
+                <!-- you marker -->
+                <g transform="translate(285,120)"><circle r="9" fill="#3FAE6B" opacity=".25"/><circle r="5" fill="#234E3F" stroke="#fff" stroke-width="2"/></g>
+              </svg>
+            </div>
+
+            <!-- FEED -->
+            <div class="feed" id="feedGood">
+              <article class="post">
+                <div class="media g">
+                  <span class="ai-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#234E3F" stroke-width="2.2"><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z"/></svg>AI: pocket garden</span>
+                  <span class="badge">◎ Photo</span>
+                </div>
+                <div class="pbody">
+                  <h3>The little corner garden is blooming again 🌼</h3>
+                  <div class="pmeta"><span>📍 Yuyuan Rd · 220 m</span><span>· by Mei</span><span>· 2h ago</span></div>
+                  <div class="react">
+                    <span class="anno" style="position:static;display:inline-grid;margin-right:4px">3</span>
+                    <button class="rbtn cheer" onclick="react(this,'cheer')">👏 Cheer · <b style="margin-left:2px">38</b></button>
+                    <button class="rbtn" onclick="react(this)">🙌 I'll help tend it · <b style="margin-left:2px">6</b></button>
+                    <button class="rbtn" onclick="react(this)">⤷ Share</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="post">
+                <div class="media g">
+                  <span class="ai-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#234E3F" stroke-width="2.2"><path d="M13 3l2.5 6.5L22 12l-6.5 2.5L13 21z"/></svg>AI: community art</span>
+                  <span class="badge">▶ Video · 0:14</span>
+                </div>
+                <div class="pbody">
+                  <h3>Volunteers repainted the underpass mural this weekend</h3>
+                  <div class="pmeta"><span>📍 Changping Rd · 480 m</span><span>· by 老张</span><span>· yesterday</span></div>
+                  <div class="react">
+                    <button class="rbtn cheer act" onclick="react(this,'cheer')">👏 Cheered · <b style="margin-left:2px">112</b></button>
+                    <button class="rbtn" onclick="react(this)">🙌 Count me in next time · <b style="margin-left:2px">24</b></button>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </main>
+
+          <!-- right panel -->
+          <aside class="side">
+            <div class="capture-cta">
+              <span class="anno" style="top:-9px;right:-9px;left:auto">1</span>
+              <b>Notice something?</b>
+              <p>Capture the good or the needs-care. Location is attached automatically on mobile.</p>
+              <div class="cap-row">
+                <button class="cap-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="14" rx="2.5"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>Photo</button>
+                <button class="cap-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10l5-3v10l-5-3z"/></svg>Video</button>
+                <button class="cap-btn solid"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Pin</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h4>👏 Capitalization in action <span class="pin">Active-constructive</span></h4>
+              <p style="font-size:11.5px;color:var(--ink-soft);line-height:1.5">Reactions aren't passive "likes." Neighbours reply with <strong>Cheer</strong>, <strong>I'll join</strong>, or <strong>Me too here</strong> — the enthusiastic responses that amplify a sharer's wellbeing (Gable &amp; Reis, 2004).</p>
+            </div>
+
+            <div class="panel">
+              <span class="anno" style="top:-9px;right:-9px;left:auto">6</span>
+              <h4>My impact <span class="pin">Intrapersonal</span></h4>
+              <div class="stat"><span class="n">27</span><span class="l">acts of care this season</span></div>
+              <div class="bar"><i style="width:68%"></i></div>
+              <div class="stat" style="margin-top:12px"><span class="n">9</span><span class="l">items you helped get <strong>resolved</strong></span></div>
+            </div>
+
+            <div class="panel">
+              <h4>Our block this month <span class="pin">Collective efficacy</span></h4>
+              <div class="stat"><span class="n">214</span><span class="l">acts across 38 neighbours</span></div>
+              <p style="font-size:11px;color:var(--ink-soft);margin-top:4px">↑ 31% vs last month · 6 issues closed together</p>
+            </div>
+
+            <div class="panel">
+              <h4>Loop status · cracked pavement</h4>
+              <div class="loopstep done"><span class="tick"></span>Reported with photo + GPS</div>
+              <div class="loopline"></div>
+              <div class="loopstep done"><span class="tick"></span>Routed to District Works</div>
+              <div class="loopline"></div>
+              <div class="loopstep"><span class="tick"></span>In progress · ETA 3 days</div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================ MOBILE ============================ -->
+    <div class="col-mobile">
+
+      <!-- PHONE 1 : feed + location -->
+      <div>
+        <div class="frame-label"><span class="num">Mobile</span> Home feed</div>
+        <div class="phone p1">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="statusbar"><span>9:41</span><span class="ico">📶 &nbsp;📍 &nbsp;🔋</span></div>
+
+            <!-- location-sensitive bar -->
+            <div class="locbar" style="position:relative">
+              <span class="anno" style="top:-10px;left:-8px">4</span>
+              <div class="gps"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#234E3F" stroke-width="2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
+              <div><b>Jing'an, Shanghai</b><span>Showing places within 1.2 km</span></div>
+              <span class="live"></span>
+            </div>
+
+            <div class="pscroll">
+              <div class="pseg">
+                <button class="on good" onclick="pSeg('good',this)">✦ The Good</button>
+                <button class="care" onclick="pSeg('care',this)">△ Needs Care</button>
+              </div>
+
+              <div class="pmap">
+                <div class="miniloc">📍 Near you</div>
+                <svg viewBox="0 0 280 130" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%">
+                  <rect width="280" height="130" fill="#EDE7D6"/>
+                  <path d="M20 20 q40 -12 80 4 q22 38 -8 70 q-56 16 -80 -12 q-10 -36 8 -62z" fill="#D5E2CF"/>
+                  <path d="M0 100 q70 -18 140 4 q80 22 140 0 l0 30 l-280 0z" fill="#BFD6D2"/>
+                  <g stroke="#F6F1E4" stroke-width="6" stroke-linecap="round"><path d="M0 40 H280"/><path d="M0 80 H280"/><path d="M120 0 V120"/><path d="M200 0 V120"/></g>
+                  <g class="pin pulse" transform="translate(150,34)"><path d="M0 0 C-7 0 -11 5 -11 11 C-11 19 0 27 0 27 C0 27 11 19 11 11 C11 5 7 0 0 0Z" fill="#E2A02E" stroke="#fff" stroke-width="2"/><circle cx="0" cy="11" r="4" fill="#fff"/></g>
+                  <g class="pin" transform="translate(90,70)"><path d="M0 0 C-7 0 -11 5 -11 11 C-11 19 0 27 0 27 C0 27 11 19 11 11 C11 5 7 0 0 0Z" fill="#E2A02E" stroke="#fff" stroke-width="2"/><circle cx="0" cy="11" r="4" fill="#fff"/></g>
+                  <g class="pin" transform="translate(212,58)"><path d="M0 0 C-7 0 -11 5 -11 11 C-11 19 0 27 0 27 C0 27 11 19 11 11 C11 5 7 0 0 0Z" fill="#C0613A" stroke="#fff" stroke-width="2"/><path d="M0 6 v5 M0 14 h.01" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
+                  <g transform="translate(140,72)"><circle r="8" fill="#3FAE6B" opacity=".25"/><circle r="4" fill="#234E3F" stroke="#fff" stroke-width="2"/></g>
+                </svg>
+              </div>
+
+              <article class="pcard">
+                <div class="pmedia g">
+                  <span class="ai-tag" style="position:absolute;top:9px;right:9px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#234E3F" stroke-width="2.4"><path d="M13 3l2.5 6.5L22 12l-6.5 2.5L13 21z"/></svg>AI: pocket garden</span>
+                  <span class="badge">◎ Photo</span>
+                </div>
+                <div class="pcb">
+                  <h3>Corner garden is blooming 🌼</h3>
+                  <div class="pmeta"><span>📍 Yuyuan Rd · 220 m</span><span>· 2h</span></div>
+                  <div class="react" style="margin-top:9px">
+                    <button class="rbtn cheer" onclick="react(this,'cheer')">👏 Cheer · <b style="margin-left:2px">38</b></button>
+                    <button class="rbtn" onclick="react(this)">🙌 I'll help</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="pcard">
+                <div class="pmedia c">
+                  <span class="ai-tag" style="position:absolute;top:9px;right:9px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#234E3F" stroke-width="2.4"><path d="M13 3l2.5 6.5L22 12l-6.5 2.5L13 21z"/></svg>AI: broken light</span>
+                  <span class="badge">▶ Video · 0:11</span>
+                  <div class="play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+                </div>
+                <div class="pcb">
+                  <h3>Streetlight out by the crossing</h3>
+                  <div class="pmeta"><span>📍 Changping Rd · 310 m</span><span>· 40m</span></div>
+                  <div class="suggest">
+                    <span class="anno" style="position:static;display:inline-grid;flex:none">5</span>
+                    <div><b>AI suggests: this needs the city</b><p>Drafted a report for District Works (lighting). Tap to send — or rally neighbours first.</p></div>
+                  </div>
+                  <div class="react">
+                    <button class="rbtn act" onclick="react(this)">↗ Send report</button>
+                    <button class="rbtn" onclick="react(this)">🙋 Me too here · <b style="margin-left:2px">5</b></button>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <!-- bottom nav + FAB -->
+            <div class="fab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3a2a10" stroke-width="2.2"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.6"/><path d="M8 6l1.5-2h5L16 6"/></svg></div>
+            <nav class="pnav">
+              <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.4 2V6L9 4l6 2 5.4-2v16L15 18z"/></svg>Map</a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Feed</a>
+              <a style="opacity:0">·</a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Impact</a>
+              <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Me</a>
+            </nav>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHONE 2 : capture / upload -->
+      <div>
+        <div class="frame-label"><span class="num">Mobile</span> Capture · photo &amp; short video</div>
+        <div class="phone p2">
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="statusbar"><span>9:42</span><span class="ico">📶 &nbsp;📍 &nbsp;🔋</span></div>
+
+            <div class="caphead">
+              <div class="x">✕</div>
+              <b>New capture</b>
+            </div>
+
+            <div class="viewfinder">
+              <span class="anno" style="top:-10px;left:-8px">2</span>
+              <div class="grid3"></div>
+              <div class="vf-rec"><i></i>REC · 0:11 / 0:15</div>
+              <div class="vf-loc"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Auto-tagged · Yuyuan Rd · 31.23, 121.45</div>
+            </div>
+
+            <div class="modes">
+              <span class="mode" onclick="setMode(this)">Photo</span>
+              <span class="mode on" onclick="setMode(this)">Video ≤ 15s</span>
+            </div>
+
+            <div class="trim">
+              <div class="tl"><span>Trim clip</span><span>11s selected · max 15s</span></div>
+              <div class="trimbar"><div class="sel"></div></div>
+            </div>
+
+            <div class="upbtns">
+              <label class="upbtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-7 7"/></svg>
+                Upload photo
+                <input type="file" accept="image/*" hidden>
+              </label>
+              <label class="upbtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10l5-3v10l-5-3z"/></svg>
+                Upload video
+                <input type="file" accept="video/*" capture="environment" hidden>
+              </label>
+            </div>
+
+            <div class="shoot"><div class="inner"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================ THEORY MAP ============================ -->
+  <section class="theory">
+    <h3>How the interface maps to the empowerment model</h3>
+    <p>Each numbered marker on the mockups ties a concrete UI element to a mechanism from the prior discussion, so the design can be reviewed against theory rather than taste.</p>
+    <div class="tgrid">
+      <div class="titem"><span class="n">1</span><div><b>One-tap capture</b><span><em>Behavioral component.</em> Lowering friction to act is what converts critical awareness into participation.</span></div></div>
+      <div class="titem"><span class="n">2</span><div><b>Photo + short video (≤15s) + auto-GPS</b><span><em>Evidence-rich awareness.</em> Rich, situated media makes the observation credible and actionable; location is captured automatically on phone.</span></div></div>
+      <div class="titem"><span class="n">3</span><div><b>Two streams: Good ✦ / Needs Care △</b><span><em>Capitalization vs. critical awareness.</em> The good stream is a savoring intervention; the care stream builds the cognitive map of the environment.</span></div></div>
+      <div class="titem"><span class="n">4</span><div><b>Location-sensitive feed</b><span><em>Situated efficacy.</em> "Within 1.2 km" anchors empowerment to the place the resident can actually affect.</span></div></div>
+      <div class="titem"><span class="n">5</span><div><b>AI action-ladder suggestion</b><span><em>Learned hopefulness.</em> Routing each issue to fix-it-yourself / rally-neighbours / send-to-city keeps problems coupled to a path to act.</span></div></div>
+      <div class="titem"><span class="n">6</span><div><b>"My impact" + "Our block this month"</b><span><em>Intrapersonal self-efficacy + collective efficacy</em> (Sampson et al., 1997). Loop-closing turns effort into visible, attributable change.</span></div></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  function setStream(kind, btn){
+    document.querySelectorAll('.seg button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    // (mock) in a real build this swaps the feed + map pins
+  }
+  function pSeg(kind, btn){
+    btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+  }
+  function react(btn, kind){
+    btn.classList.toggle('act');
+    const b = btn.querySelector('b');
+    if(b){ let n=parseInt(b.textContent); b.textContent = btn.classList.contains('act') ? n+1 : n-1; }
+  }
+  function setMode(el){
+    el.parentElement.querySelectorAll('.mode').forEach(m=>m.classList.remove('on'));
+    el.classList.add('on');
+  }
+</script>
+</body>
+</html>
