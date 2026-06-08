@@ -141,3 +141,13 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# ourblock app data
+/data/
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# secrets / credentials (never commit)
+.env
+*-key.json
+server/gcs-key.json
