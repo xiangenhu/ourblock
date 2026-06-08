@@ -1,4 +1,4 @@
-import db from './db.js';
+import { users } from './store/repo.js';
 
 /** Haversine distance in metres. */
 export function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -13,31 +13,19 @@ export function distanceMeters(lat1, lng1, lat2, lng2) {
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-const authorStmt = db.prepare(
-  'SELECT id, name, name_cjk, avatar_initial, level, level_title FROM users WHERE id = ?'
-);
-const reactionCountStmt = db.prepare(
-  `SELECT type, COUNT(*) AS n FROM reactions WHERE post_id = ? GROUP BY type`
-);
-const myReactionsStmt = db.prepare(
-  `SELECT type FROM reactions WHERE post_id = ? AND user_id = ?`
-);
-const stepsStmt = db.prepare(
-  `SELECT id, label, status, position, detail FROM loop_steps WHERE post_id = ? ORDER BY position`
-);
-const commentCountStmt = db.prepare(
-  `SELECT COUNT(*) AS n FROM comments WHERE post_id = ?`
-);
-
-/** Turn a raw post row into the API shape the frontend expects. */
+/**
+ * Turn a stored post doc into the API shape the frontend expects.
+ * Pure: the doc is self-contained (author snapshot + reactions/comments/loop inline),
+ * so no GCS reads happen here — the feed shapes its whole page from memory.
+ */
 export function shapePost(post, viewer) {
-  const author = authorStmt.get(post.user_id);
-
   const counts = { cheer: 0, help: 0, metoo: 0 };
-  for (const r of reactionCountStmt.all(post.id)) counts[r.type] = r.n;
+  for (const r of post.reactions || []) {
+    if (counts[r.type] != null) counts[r.type] += 1;
+  }
 
   const mine = viewer
-    ? myReactionsStmt.all(post.id, viewer.id).map((r) => r.type)
+    ? (post.reactions || []).filter((r) => r.userId === viewer.id).map((r) => r.type)
     : [];
 
   const dist =
@@ -45,45 +33,63 @@ export function shapePost(post, viewer) {
       ? distanceMeters(viewer.lat, viewer.lng, post.lat, post.lng)
       : null;
 
+  const loop = [...(post.loop || [])]
+    .sort((a, b) => a.position - b.position)
+    .map((s) => ({ id: s.id, label: s.label, status: s.status, position: s.position, detail: s.detail }));
+
   return {
     id: post.id,
     stream: post.stream,
     title: post.title,
     body: post.body,
-    mediaType: post.media_type,
-    mediaUrl: post.media_url,
-    durationS: post.duration_s,
+    mediaType: post.mediaType,
+    mediaUrl: post.mediaUrl,
+    durationS: post.durationS,
     lat: post.lat,
     lng: post.lng,
-    placeName: post.place_name,
+    placeName: post.placeName,
     distanceM: dist,
     ai: {
-      tag: post.ai_tag,
-      category: post.ai_category,
-      action: post.ai_action,
-      confidence: post.ai_confidence,
-      summary: post.ai_summary,
+      tag: post.ai?.tag ?? null,
+      category: post.ai?.category ?? null,
+      action: post.ai?.action ?? null,
+      confidence: post.ai?.confidence ?? null,
+      summary: post.ai?.summary ?? null,
     },
     status: post.status,
-    createdAt: post.created_at,
-    author: author
+    createdAt: post.createdAt,
+    author: post.author
       ? {
-          id: author.id,
-          name: author.name,
-          nameCjk: author.name_cjk,
-          avatar: author.avatar_initial,
-          level: author.level,
-          levelTitle: author.level_title,
+          id: post.author.id,
+          name: post.author.name,
+          nameCjk: post.author.nameCjk,
+          avatar: post.author.avatar,
+          level: post.author.level,
+          levelTitle: post.author.levelTitle,
         }
       : null,
     reactions: counts,
     myReactions: mine,
-    commentCount: commentCountStmt.get(post.id).n,
-    loop: stepsStmt.all(post.id),
+    commentCount: (post.comments || []).length,
+    loop,
   };
 }
 
-export function getViewer(req) {
+/** Resolve the logged-in user doc from req.userId (set by attachUser). Async (GCS read). */
+export async function getViewer(req) {
   if (!req.userId) return null;
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) || null;
+  return (await users.getById(req.userId)) || null;
+}
+
+/** Snapshot the denormalized author fields stored on each post. */
+export function authorSnapshot(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    nameCjk: user.nameCjk,
+    avatar: user.avatar,
+    level: user.level,
+    levelTitle: user.levelTitle,
+  };
 }

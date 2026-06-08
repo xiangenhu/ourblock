@@ -10,12 +10,13 @@
  * This is the "learned hopefulness" mechanism from the design: every issue
  * stays coupled to a concrete path to act.
  *
- * If ANTHROPIC_API_KEY is set the classifier asks Claude; otherwise it falls
- * back to a transparent keyword heuristic so the app is fully functional with
- * zero configuration.
+ * If an LLM vendor is configured (LLM_VENDOR + key), the classifier asks the model
+ * through the single LLM gateway; otherwise it falls back to a transparent keyword
+ * heuristic so the app is fully functional with zero configuration.
  */
 
-const MODEL = 'claude-opus-4-8';
+import config from './config.js';
+import { callLLM } from './llm/gateway.js';
 
 const RULES = [
   // category, regex, default action, suggested agency
@@ -63,38 +64,27 @@ function heuristic({ title = '', body = '', stream = 'good' }) {
   };
 }
 
-async function viaClaude(input) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
+const SYSTEM =
+  'You route civic observations to the lowest viable rung of action. ' +
+  'Return ONLY JSON: {"tag":string,"category":string,"action":"self"|"rally"|"city",' +
+  '"agency":string,"confidence":number,"summary":string}. ' +
+  'tag is a short label like "AI: broken light". "self" = fix yourself, ' +
+  '"rally" = organise neighbours, "city" = send to an agency. ' +
+  'The Good stream should always use "self".';
+
+/** Ask the configured model via the single gateway. Returns null on any failure. */
+async function viaGateway(input) {
+  if (!config.has.llm()) return null;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 300,
-        system:
-          'You route civic observations to the lowest viable rung of action. ' +
-          'Return ONLY JSON: {"tag":string,"category":string,"action":"self"|"rally"|"city",' +
-          '"agency":string,"confidence":number,"summary":string}. ' +
-          'tag is a short label like "AI: broken light". "self" = fix yourself, ' +
-          '"rally" = organise neighbours, "city" = send to an agency. ' +
-          'The Good stream should always use "self".',
-        messages: [
-          {
-            role: 'user',
-            content: `stream=${input.stream}\ntitle=${input.title}\nbody=${input.body || ''}`,
-          },
-        ],
-      }),
+    const txt = await callLLM({
+      feature: 'classify',
+      userId: input.userId,
+      maxTokens: 300,
+      json: true,
+      system: SYSTEM,
+      user: `stream=${input.stream}\ntitle=${input.title}\nbody=${input.body || ''}`,
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const txt = data?.content?.[0]?.text || '';
+    if (!txt) return null;
     const json = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
     if (!['self', 'rally', 'city'].includes(json.action)) return null;
     return json;
@@ -104,7 +94,7 @@ async function viaClaude(input) {
 }
 
 export async function classify(input) {
-  return (await viaClaude(input)) || heuristic(input);
+  return (await viaGateway(input)) || heuristic(input);
 }
 
 export { heuristic };

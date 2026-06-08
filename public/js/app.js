@@ -9,6 +9,7 @@ const state = {
   stream: 'good',   // good | care (for near/list streams)
   sort: 'near',     // new | near | top
   postId: null,
+  config: { googleEnabled: true, gatewayEnabled: true },
 };
 
 const NAV = [
@@ -33,6 +34,9 @@ const STATUS_LABEL = {
 /* ---------------------------------------------------------------- bootstrap */
 async function boot() {
   try {
+    state.config = await api.get('/api/auth/config');
+  } catch { /* gateway config unavailable — fall back to defaults */ }
+  try {
     const { user } = await api.get('/api/auth/me');
     state.user = user;
   } catch { /* offline / first run */ }
@@ -55,43 +59,129 @@ function routeFromHash() {
 function go(path) { location.hash = `#/${path}`; }
 
 /* ------------------------------------------------------------------- auth */
+const GOOGLE_G = '<svg width="17" height="17" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.4 5.4 2.5 13.2l7.8 6.1C12.2 13.4 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.2-.4-4.7H24v9h12.4c-.5 2.9-2.1 5.4-4.6 7l7.1 5.5c4.2-3.9 6.6-9.6 6.6-16.8z"/><path fill="#FBBC05" d="M10.3 19.3c-.5 1.4-.8 2.9-.8 4.5s.3 3.1.8 4.5l-7.8 6.1C.9 31 0 27.6 0 24s.9-7 2.5-10.6l7.8 5.9z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.1-5.5c-2 1.3-4.6 2.1-8.1 2.1-6.4 0-11.8-3.9-13.7-9.4l-7.8 6.1C6.4 42.6 14.6 48 24 48z"/></svg>';
+
 function renderAuth() {
-  let mode = 'login';
+  let mode = 'login';           // login | register | verify | forgot | reset
+  let pendingEmail = '';        // carried into verify / reset
+  const oauthErr = /[?&]error=oauth/.test(location.hash);
+
+  const setErr = (card, msg, kind = 'auth-err') => {
+    card.querySelector('.err-slot').innerHTML = msg ? `<div class="${kind}">${esc(msg)}</div>` : '';
+  };
+
   const mount = () => {
     app.innerHTML = '';
+    const showGoogle = state.config.googleEnabled && (mode === 'login' || mode === 'register');
+
+    const forms = {
+      login: `
+        <form class="auth-form" data-act="login">
+          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <div class="field"><label>Password</label><input name="password" type="password" placeholder="••••••" required></div>
+          <button class="btn primary" type="submit">Sign in</button>
+        </form>
+        <div class="auth-switch"><a data-sw="forgot">Forgot password?</a> · New here? <a data-sw="register">Create an account</a></div>
+        <div class="demo-hint">Demo neighbour → <code>ling@ourblock.org</code> · <code>ourblock</code></div>`,
+      register: `
+        <form class="auth-form" data-act="register">
+          <div class="field"><label>Name</label><input name="name" placeholder="e.g. Ling W." required></div>
+          <div class="field"><label>Name in 中文 (optional)</label><input name="nameCjk" placeholder="玲"></div>
+          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <div class="field"><label>Password</label><input name="password" type="password" placeholder="at least 6 characters" required></div>
+          <button class="btn primary" type="submit">Create account</button>
+        </form>
+        <div class="auth-switch">Have an account? <a data-sw="login">Sign in</a></div>`,
+      verify: `
+        <p class="auth-note">We emailed a 6-digit code to <b>${esc(pendingEmail)}</b>. Enter it to finish.</p>
+        <form class="auth-form" data-act="verify">
+          <div class="field"><label>Verification code</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
+          <button class="btn primary" type="submit">Verify &amp; continue</button>
+        </form>
+        <div class="auth-switch"><a data-sw="resend">Resend code</a> · <a data-sw="login">Back to sign in</a></div>`,
+      forgot: `
+        <p class="auth-note">Enter your email and we'll send a reset code.</p>
+        <form class="auth-form" data-act="forgot">
+          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <button class="btn primary" type="submit">Send reset code</button>
+        </form>
+        <div class="auth-switch"><a data-sw="login">Back to sign in</a></div>`,
+      reset: `
+        <p class="auth-note">Enter the code sent to <b>${esc(pendingEmail)}</b> and your new password.</p>
+        <form class="auth-form" data-act="reset">
+          <div class="field"><label>Reset code</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
+          <div class="field"><label>New password</label><input name="newPassword" type="password" placeholder="at least 6 characters" required></div>
+          <button class="btn primary" type="submit">Update password</button>
+        </form>
+        <div class="auth-switch"><a data-sw="login">Back to sign in</a></div>`,
+    };
+
+    const titles = {
+      login: 'Your block, in good hands — together.',
+      register: 'Create your neighbour account.',
+      verify: 'Check your email.',
+      forgot: 'Reset your password.',
+      reset: 'Set a new password.',
+    };
+
     const card = h(`
       <div class="auth-wrap"><div class="auth-card">
         <div class="brand cjk">优城美市<small>Our Block</small></div>
-        <div class="auth-tag">Your block, in good hands — together.</div>
+        <div class="auth-tag">${titles[mode]}</div>
         <div class="err-slot"></div>
-        <form class="auth-form">
-          ${mode === 'register' ? `
-            <div class="field"><label>Name</label><input name="name" placeholder="e.g. Ling W." required></div>
-            <div class="field"><label>Name in 中文 (optional)</label><input name="nameCjk" placeholder="玲"></div>` : ''}
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <div class="field"><label>Password</label><input name="password" type="password" placeholder="••••••" required></div>
-          <button class="btn primary" type="submit">${mode === 'login' ? 'Sign in' : 'Create account'}</button>
-        </form>
-        <div class="auth-switch">
-          ${mode === 'login' ? "New here? <a data-sw>Create an account</a>" : "Have an account? <a data-sw>Sign in</a>"}
-        </div>
-        ${mode === 'login' ? `<div class="demo-hint">Demo neighbour → <code>ling@ourblock.org</code> · <code>ourblock</code></div>` : ''}
+        ${showGoogle ? `<button class="btn google" data-google>${GOOGLE_G}<span>Continue with Google</span></button><div class="auth-divider"><span>or</span></div>` : ''}
+        ${forms[mode]}
       </div></div>`);
 
-    card.querySelector('[data-sw]').onclick = () => { mode = mode === 'login' ? 'register' : 'login'; mount(); };
+    if (oauthErr && mode === 'login') setErr(card, "Google sign-in didn't complete. Please try again.");
+
+    const gbtn = card.querySelector('[data-google]');
+    if (gbtn) gbtn.onclick = () => { window.location.href = '/api/auth/google/start'; };
+
+    card.querySelectorAll('[data-sw]').forEach((a) => {
+      a.onclick = async () => {
+        const to = a.dataset.sw;
+        if (to === 'resend') {
+          try { await api.post('/api/auth/resend-code', { email: pendingEmail }); toast('New code sent', 'ok'); }
+          catch (e) { setErr(card, e.message); }
+          return;
+        }
+        mode = to; mount();
+      };
+    });
+
     card.querySelector('.auth-form').onsubmit = async (e) => {
       e.preventDefault();
+      const act = e.target.dataset.act;
       const btn = e.target.querySelector('button');
       btn.disabled = true;
+      setErr(card, '');
       const fd = Object.fromEntries(new FormData(e.target));
       try {
-        const data = await api.post(`/api/auth/${mode}`, fd);
-        api.saveToken(data.token);
-        state.user = data.user;
-        toast(`Welcome, ${data.user.name.split(' ')[0]}`, 'ok');
-        go('near');
+        if (act === 'login') {
+          const data = await api.post('/api/auth/login', fd);
+          api.saveToken(data.token); state.user = data.user;
+          toast(`Welcome, ${data.user.name.split(' ')[0]}`, 'ok'); go('near');
+        } else if (act === 'register') {
+          const out = await api.post('/api/auth/register', fd);
+          if (out.user) { api.saveToken(out.token); state.user = out.user; go('near'); return; } // local fallback
+          pendingEmail = fd.email; mode = 'verify'; mount();
+          toast('Verification code sent', 'ok');
+        } else if (act === 'verify') {
+          const data = await api.post('/api/auth/verify', { email: pendingEmail, code: fd.code });
+          api.saveToken(data.token); state.user = data.user;
+          toast('Email verified — welcome!', 'ok'); go('near');
+        } else if (act === 'forgot') {
+          await api.post('/api/auth/forgot-password', { email: fd.email });
+          pendingEmail = fd.email; mode = 'reset'; mount();
+          toast('Reset code sent (if the email exists)', 'ok');
+        } else if (act === 'reset') {
+          await api.post('/api/auth/reset-password', { email: pendingEmail, code: fd.code, newPassword: fd.newPassword });
+          mode = 'login'; mount();
+          toast('Password updated — sign in', 'ok');
+        }
       } catch (err) {
-        card.querySelector('.err-slot').innerHTML = `<div class="auth-err">${esc(err.message)}</div>`;
+        setErr(card, err.message);
         btn.disabled = false;
       }
     };
@@ -134,6 +224,8 @@ function renderShell(centerNode) {
     navSlot.appendChild(item);
   });
   rail.querySelector('.signout').onclick = signOut;
+  rail.querySelector('.me').onclick = openAccount;
+  rail.querySelector('.me').style.cursor = 'pointer';
 
   // center
   const main = h(`<main class="main"></main>`);
@@ -180,6 +272,52 @@ async function signOut() {
   state.user = null;
   location.hash = '';
   renderAuth();
+}
+
+/* ---------------------------------------------------------------- account */
+function openAccount() {
+  const u = state.user;
+  const isGoogle = u.provider === 'google';
+  const overlay = h(`<div class="modal-overlay"></div>`);
+  const modal = h(`
+    <div class="modal">
+      <div class="modal-head">
+        <div class="av" style="width:38px;height:38px;border-radius:99px;display:grid;place-items:center;background:linear-gradient(135deg,var(--good),#D98748);color:#3a2a10;font-family:var(--display);font-weight:700">${esc(u.avatar || '·')}</div>
+        <div><b style="font-family:var(--display);font-size:15px">${esc(u.name)}</b><div style="font-size:11.5px;color:var(--ink-soft)">${esc(u.email)} · ${isGoogle ? 'Google account' : 'Email account'}</div></div>
+        <button class="modal-x" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        ${isGoogle ? `
+          <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.5">You're signed in with Google. Manage your password and security in your Google account.</p>`
+        : `
+          <h4 style="font-family:var(--display);font-size:13px;margin-bottom:10px">Change password</h4>
+          <div class="err-slot"></div>
+          <form class="acct-form">
+            <div class="field"><label>Current password</label><input name="currentPassword" type="password" required></div>
+            <div class="field"><label>New password</label><input name="newPassword" type="password" placeholder="at least 6 characters" required></div>
+            <button class="btn primary" type="submit">Update password</button>
+          </form>`}
+      </div>
+    </div>`);
+  overlay.appendChild(modal);
+  const close = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  modal.querySelector('.modal-x').onclick = close;
+
+  const form = modal.querySelector('.acct-form');
+  if (form) form.onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button'); btn.disabled = true;
+    modal.querySelector('.err-slot').innerHTML = '';
+    try {
+      await api.post('/api/auth/change-password', Object.fromEntries(new FormData(form)));
+      toast('Password changed', 'ok'); close();
+    } catch (err) {
+      modal.querySelector('.err-slot').innerHTML = `<div class="auth-err">${esc(err.message)}</div>`;
+      btn.disabled = false;
+    }
+  };
+  document.body.appendChild(overlay);
 }
 
 /* --------------------------------------------------------------- feed view */

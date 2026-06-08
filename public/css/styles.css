@@ -169,6 +169,19 @@ svg.map{display:block;width:100%;height:auto;cursor:grab}
 .auth-switch{text-align:center;font-size:12.5px;color:var(--ink-soft);margin-top:14px}
 .auth-switch a{color:var(--green-2);font-weight:700;cursor:pointer}
 .auth-err{background:var(--care-tint);color:#8a3c1c;border-radius:9px;padding:9px 11px;font-size:12px;font-weight:600;margin-bottom:12px}
+.auth-note{font-size:12.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:14px}
+.auth-note b{color:var(--ink)}
+.btn.google{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.btn.google:hover{background:var(--paper)}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--ink-soft);font-size:11.5px;font-weight:600}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+
+/* account modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(32,37,31,.45);backdrop-filter:blur(3px);z-index:300;display:grid;place-items:center;padding:20px;animation:rise .2s}
+.modal{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.modal-head{display:flex;align-items:center;gap:11px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.modal-head .modal-x{margin-left:auto;border:0;background:var(--paper);border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:13px;color:var(--ink-soft)}
+.modal-body{padding:18px}
 .demo-hint{background:var(--green-tint);border:1px solid #C9DDD2;color:#3c5247;border-radius:9px;padding:9px 11px;font-size:11.5px;margin-top:14px;line-height:1.5}
 .demo-hint code{background:#fff;padding:1px 5px;border-radius:5px;font-weight:700}
 

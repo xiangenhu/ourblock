@@ -1,37 +1,41 @@
 import express from 'express';
-import db from '../db.js';
 import { requireAuth } from '../auth.js';
+import { users, posts } from '../store/repo.js';
 
 const router = express.Router();
 
+const reactionsOf = (p) => p.reactions || [];
+
 /** GET /api/stats/me — intrapersonal self-efficacy. */
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', requireAuth, async (req, res) => {
   const uid = req.userId;
-  const acts =
-    db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(uid).n +
-    db.prepare('SELECT COUNT(*) AS n FROM reactions WHERE user_id = ?').get(uid).n;
-  const captured = db.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id = ?').get(uid).n;
-  const good = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id=? AND stream='good'").get(uid).n;
-  const care = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id=? AND stream='care'").get(uid).n;
+  const all = await posts.all();
 
-  // Items the viewer helped get resolved: they reacted to (or authored) a now-resolved care item.
-  const resolved = db
-    .prepare(
-      `SELECT COUNT(DISTINCT p.id) AS n FROM posts p
-       WHERE p.status='resolved' AND p.stream='care'
-         AND (p.user_id = ? OR p.id IN (SELECT post_id FROM reactions WHERE user_id = ?))`
-    )
-    .get(uid, uid).n;
+  const mine = all.filter((p) => p.userId === uid);
+  const myReactions = all.reduce(
+    (n, p) => n + reactionsOf(p).filter((r) => r.userId === uid).length,
+    0
+  );
+  const acts = mine.length + myReactions;
+  const captured = mine.length;
+  const good = mine.filter((p) => p.stream === 'good').length;
+  const care = mine.filter((p) => p.stream === 'care').length;
 
-  const cheersReceived = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM reactions r JOIN posts p ON p.id=r.post_id
-       WHERE p.user_id=? AND r.type='cheer'`
-    )
-    .get(uid).n;
+  // Care items the viewer helped close: authored, or reacted to, a now-resolved care item.
+  const resolved = all.filter(
+    (p) =>
+      p.status === 'resolved' &&
+      p.stream === 'care' &&
+      (p.userId === uid || reactionsOf(p).some((r) => r.userId === uid))
+  ).length;
 
-  // Season goal of 40 acts (drives the progress bar in the side panel).
-  const goal = 40;
+  // Cheers received on the viewer's own posts.
+  const cheersReceived = mine.reduce(
+    (n, p) => n + reactionsOf(p).filter((r) => r.type === 'cheer').length,
+    0
+  );
+
+  const goal = 40; // season goal (drives the progress bar in the side panel)
   res.json({
     acts,
     captured,
@@ -45,26 +49,28 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 /** GET /api/stats/community — collective efficacy for the block. */
-router.get('/community', (_req, res) => {
-  const acts =
-    db.prepare('SELECT COUNT(*) AS n FROM posts').get().n +
-    db.prepare('SELECT COUNT(*) AS n FROM reactions').get().n;
-  const neighbours = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
-  const places = db
-    .prepare('SELECT COUNT(DISTINCT COALESCE(place_name, id)) AS n FROM posts')
-    .get().n;
-  const resolved = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE status='resolved'").get().n;
-  const good = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE stream='good'").get().n;
-  const care = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE stream='care'").get().n;
+router.get('/community', async (_req, res) => {
+  const [all, everyone] = await Promise.all([posts.all(), users.all()]);
 
-  const leaders = db
-    .prepare(
-      `SELECT u.name, u.name_cjk, u.avatar_initial AS avatar,
-              COUNT(p.id) AS posts
-       FROM users u LEFT JOIN posts p ON p.user_id=u.id
-       GROUP BY u.id ORDER BY posts DESC, u.id LIMIT 5`
-    )
-    .all();
+  const totalReactions = all.reduce((n, p) => n + reactionsOf(p).length, 0);
+  const acts = all.length + totalReactions;
+  const neighbours = everyone.length;
+  const places = new Set(all.map((p) => p.placeName || `post:${p.id}`)).size;
+  const resolved = all.filter((p) => p.status === 'resolved').length;
+  const good = all.filter((p) => p.stream === 'good').length;
+  const care = all.filter((p) => p.stream === 'care').length;
+
+  const postsByUser = new Map();
+  for (const p of all) postsByUser.set(p.userId, (postsByUser.get(p.userId) || 0) + 1);
+  const leaders = everyone
+    .map((u) => ({
+      name: u.name,
+      nameCjk: u.nameCjk,
+      avatar: u.avatar,
+      posts: postsByUser.get(u.id) || 0,
+    }))
+    .sort((a, b) => b.posts - a.posts)
+    .slice(0, 5);
 
   res.json({
     acts,

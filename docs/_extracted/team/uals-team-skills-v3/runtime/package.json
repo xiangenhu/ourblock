@@ -1,0 +1,35 @@
+{
+  "name": "@uals/skill-runtime",
+  "version": "3.0.0",
+  "description": "Shared Node.js backbone for the UALS team-* Claude Code skills: GCS-only persistence (CAS), unified LLM gateway, hash-based i18n, three-tier RBAC, xAPI client, and the contextual-help + bug-tracking features.",
+  "license": "UNLICENSED",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "public",
+    "scripts",
+    "install.js",
+    ".env.example",
+    "README.md"
+  ],
+  "bin": {
+    "uals-install-skills": "install.js",
+    "uals-bug-triage": "scripts/bug-triage.js"
+  },
+  "scripts": {
+    "debugging": "node scripts/bug-triage.js",
+    "install-skills": "node install.js",
+    "check": "node -e \"['src/index.js','src/config.js','src/store/gcs.js','src/llm/gateway.js','src/roles/authz.js','src/xapi/client.js','src/i18n/hash.js','src/help/routes.js','src/bug/reporter.js','src/bug/routes.js','src/bug/fetch.js','scripts/bug-triage.js'].forEach(f=>require('child_process').execSync('node --check '+f)); console.log('all OK')\""
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.0.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.22.2"
+  },
+  "optionalDependencies": {
+    "dotenv": "^16.4.0"
+  }
+}

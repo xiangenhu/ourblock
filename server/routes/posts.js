@@ -1,57 +1,48 @@
 import express from 'express';
-import db from '../db.js';
 import { requireAuth } from '../auth.js';
 import { classify } from '../ai.js';
-import { shapePost, getViewer, distanceMeters } from '../helpers.js';
+import { posts, addComment, addLoopStep, toggleReaction } from '../store/repo.js';
+import { shapePost, getViewer, distanceMeters, authorSnapshot } from '../helpers.js';
+import events from '../xapi/events.js';
 
 const router = express.Router();
 
 /**
  * GET /api/posts
- * Query: stream=good|care, sort=new|near|top, radius=<metres>, mine=1, status=<status>
- * Location-aware: when the viewer has coordinates, results can be filtered to a
- * radius and sorted by distance ("within 1.2 km" in the design).
+ * Query: stream=good|care, sort=new|near|top, radius=<metres>, mine=1, status=<status>,
+ *        limit, offset
+ * The feed is a single GCS prefix scan (post docs are self-contained); filtering, sorting
+ * and pagination happen in memory.
  */
-router.get('/', (req, res) => {
-  const viewer = getViewer(req);
+router.get('/', async (req, res) => {
+  const viewer = await getViewer(req);
   const { stream, sort = 'new', radius, mine, status } = req.query;
 
-  const where = [];
-  const params = [];
-  if (stream === 'good' || stream === 'care') {
-    where.push('stream = ?');
-    params.push(stream);
-  }
-  if (status) {
-    where.push('status = ?');
-    params.push(status);
-  }
-  if (mine === '1' && viewer) {
-    where.push('user_id = ?');
-    params.push(viewer.id);
-  }
+  let all = await posts.all();
 
-  const sql = `SELECT * FROM posts ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
-  let rows = db.prepare(sql).all(...params);
-  let posts = rows.map((p) => shapePost(p, viewer));
+  if (stream === 'good' || stream === 'care') all = all.filter((p) => p.stream === stream);
+  if (status) all = all.filter((p) => p.status === status);
+  if (mine === '1' && viewer) all = all.filter((p) => p.userId === viewer.id);
+
+  let shaped = all.map((p) => shapePost(p, viewer));
 
   // radius filter (metres) — only meaningful with a located viewer
   const r = radius ? Number(radius) : null;
-  if (r && viewer) posts = posts.filter((p) => p.distanceM == null || p.distanceM <= r);
+  if (r && viewer) shaped = shaped.filter((p) => p.distanceM == null || p.distanceM <= r);
 
   if (sort === 'near') {
-    posts.sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity));
+    shaped.sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity));
   } else if (sort === 'top') {
     const score = (p) => p.reactions.cheer + p.reactions.help + p.reactions.metoo;
-    posts.sort((a, b) => score(b) - score(a));
+    shaped.sort((a, b) => score(b) - score(a));
   } else {
-    posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    shaped.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
 
-  const total = posts.length;
+  const total = shaped.length;
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
   const offset = Math.max(0, Number(req.query.offset) || 0);
-  const page = posts.slice(offset, offset + limit);
+  const page = shaped.slice(offset, offset + limit);
 
   res.json({
     posts: page,
@@ -62,184 +53,156 @@ router.get('/', (req, res) => {
 });
 
 /** Lightweight pins for the map. */
-router.get('/pins', (req, res) => {
-  const viewer = getViewer(req);
-  const rows = db
-    .prepare('SELECT id, stream, lat, lng, title, status FROM posts WHERE lat IS NOT NULL')
-    .all();
-  const pins = rows.map((p) => ({
-    id: p.id,
-    stream: p.stream,
-    lat: p.lat,
-    lng: p.lng,
-    title: p.title,
-    status: p.status,
-    distanceM: viewer ? distanceMeters(viewer.lat, viewer.lng, p.lat, p.lng) : null,
-  }));
+router.get('/pins', async (req, res) => {
+  const viewer = await getViewer(req);
+  const all = await posts.all();
+  const pins = all
+    .filter((p) => p.lat != null)
+    .map((p) => ({
+      id: p.id,
+      stream: p.stream,
+      lat: p.lat,
+      lng: p.lng,
+      title: p.title,
+      status: p.status,
+      distanceM: viewer ? distanceMeters(viewer.lat, viewer.lng, p.lat, p.lng) : null,
+    }));
   res.json({ pins, viewer: viewer ? { lat: viewer.lat, lng: viewer.lng } : null });
 });
 
-router.get('/:id', (req, res) => {
-  const viewer = getViewer(req);
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+router.get('/:id', async (req, res) => {
+  const viewer = await getViewer(req);
+  const post = await posts.getById(req.params.id);
   if (!post) return res.status(404).json({ error: 'Not found.' });
-  const shaped = shapePost(post, viewer);
-  const comments = db
-    .prepare(
-      `SELECT c.id, c.body, c.created_at, u.name, u.avatar_initial
-       FROM comments c JOIN users u ON u.id = c.user_id
-       WHERE c.post_id = ? ORDER BY c.created_at`
-    )
-    .all(post.id)
-    .map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at, author: c.name, avatar: c.avatar_initial }));
-  res.json({ post: shaped, comments });
+  const comments = [...(post.comments || [])]
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+    .map((c) => ({ id: c.id, body: c.body, createdAt: c.createdAt, author: c.authorName, avatar: c.avatar }));
+  if (viewer) events.viewedPost(viewer, post);
+  res.json({ post: shapePost(post, viewer), comments });
 });
 
 /** Create an observation. AI routes it to the lowest viable rung of action. */
 router.post('/', requireAuth, async (req, res) => {
-  const { stream, title, body, mediaType, mediaUrl, durationS, lat, lng, placeName } =
-    req.body || {};
+  const { stream, title, body, mediaType, mediaUrl, durationS, lat, lng, placeName } = req.body || {};
   if (!['good', 'care'].includes(stream))
     return res.status(400).json({ error: 'Pick a stream: good or care.' });
-  if (!title || !title.trim())
-    return res.status(400).json({ error: 'Add a short title.' });
+  if (!title || !title.trim()) return res.status(400).json({ error: 'Add a short title.' });
 
-  const ai = await classify({ stream, title, body });
+  const viewer = await getViewer(req);
+  const ai = await classify({ stream, title, body, userId: req.userId });
 
-  const info = db
-    .prepare(
-      `INSERT INTO posts
-       (user_id, stream, title, body, media_type, media_url, duration_s, lat, lng, place_name,
-        ai_tag, ai_category, ai_action, ai_confidence, ai_summary, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    )
-    .run(
-      req.userId,
-      stream,
-      title.trim(),
-      body || '',
-      mediaType === 'video' ? 'video' : 'photo',
-      mediaUrl || null,
-      durationS || null,
-      lat ?? null,
-      lng ?? null,
-      placeName || null,
-      ai.tag,
-      ai.category,
-      ai.action,
-      ai.confidence,
-      ai.summary,
-      'open'
-    );
+  const post = await posts.create({
+    userId: req.userId,
+    stream,
+    title: title.trim(),
+    body: body || '',
+    mediaType,
+    mediaUrl: mediaUrl || null,
+    durationS: durationS || null,
+    lat: lat ?? null,
+    lng: lng ?? null,
+    placeName: placeName || null,
+    ai: {
+      tag: ai.tag,
+      category: ai.category,
+      action: ai.action,
+      confidence: ai.confidence,
+      summary: ai.summary,
+    },
+    status: 'open',
+    author: authorSnapshot(viewer),
+  });
 
   // For care items routed to the city, seed the first loop step automatically.
   if (stream === 'care' && ai.action === 'city') {
-    db.prepare(
-      `INSERT INTO loop_steps (post_id, label, status, position, detail)
-       VALUES (?, 'Reported with photo + GPS', 'done', 0, ?)`
-    ).run(info.lastInsertRowid, placeName || null);
+    await posts.mutate(post.id, (doc) => {
+      addLoopStep(doc, { label: 'Reported with photo + GPS', status: 'done', detail: placeName || null });
+      return doc;
+    });
   }
 
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(info.lastInsertRowid);
-  const viewer = getViewer(req);
-  res.status(201).json({ post: shapePost(post, viewer) });
+  const fresh = await posts.getById(post.id);
+  events.postCreated(viewer, fresh);
+  res.status(201).json({ post: shapePost(fresh, viewer) });
 });
 
 /** Toggle a reaction (cheer / help / metoo). */
-router.post('/:id/react', requireAuth, (req, res) => {
+router.post('/:id/react', requireAuth, async (req, res) => {
   const { type } = req.body || {};
   if (!['cheer', 'help', 'metoo'].includes(type))
     return res.status(400).json({ error: 'Unknown reaction.' });
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
-  if (!post) return res.status(404).json({ error: 'Not found.' });
 
-  const existing = db
-    .prepare('SELECT id FROM reactions WHERE post_id = ? AND user_id = ? AND type = ?')
-    .get(post.id, req.userId, type);
-  if (existing) {
-    db.prepare('DELETE FROM reactions WHERE id = ?').run(existing.id);
-  } else {
-    db.prepare('INSERT INTO reactions (post_id, user_id, type) VALUES (?,?,?)').run(
-      post.id,
-      req.userId,
-      type
-    );
+  let added = false;
+  const fresh = await posts.mutate(req.params.id, (doc) => {
+    added = toggleReaction(doc, { userId: req.userId, type });
     // "Me too here" on a care item nudges it toward rallying.
-    if (type === 'metoo' && post.status === 'open') {
-      db.prepare("UPDATE posts SET status = 'rallying' WHERE id = ?").run(post.id);
-    }
-  }
-  const fresh = db.prepare('SELECT * FROM posts WHERE id = ?').get(post.id);
-  res.json({ post: shapePost(fresh, getViewer(req)) });
+    if (added && type === 'metoo' && doc.status === 'open') doc.status = 'rallying';
+    return doc;
+  });
+  if (!fresh) return res.status(404).json({ error: 'Not found.' });
+
+  const viewer = await getViewer(req);
+  if (added) events.reacted(viewer, fresh, type);
+  res.json({ post: shapePost(fresh, viewer) });
 });
 
 /** Advance the action loop (send report, mark progress, resolve). */
-router.post('/:id/advance', requireAuth, (req, res) => {
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+router.post('/:id/advance', requireAuth, async (req, res) => {
+  const post = await posts.getById(req.params.id);
   if (!post) return res.status(404).json({ error: 'Not found.' });
-  if (post.user_id !== req.userId)
+  if (post.userId !== req.userId)
     return res.status(403).json({ error: 'Only the reporter can advance this loop.' });
 
   const { action } = req.body || {};
-  const addStep = (label, detail) => {
-    const pos =
-      (db.prepare('SELECT MAX(position) AS m FROM loop_steps WHERE post_id = ?').get(post.id)
-        .m ?? -1) + 1;
-    // previous active step becomes done
-    db.prepare("UPDATE loop_steps SET status='done' WHERE post_id=? AND status='active'").run(post.id);
-    db.prepare(
-      'INSERT INTO loop_steps (post_id, label, status, position, detail) VALUES (?,?,?,?,?)'
-    ).run(post.id, label, 'active', pos, detail || null);
-  };
+  const known = ['send_report', 'in_progress', 'resolve'];
+  if (!known.includes(action)) return res.status(400).json({ error: 'Unknown action.' });
 
-  if (action === 'send_report') {
-    const agency = post.ai_category ? `District Works (${post.ai_category})` : 'District Works';
-    if (db.prepare('SELECT COUNT(*) AS n FROM loop_steps WHERE post_id=?').get(post.id).n === 0) {
-      db.prepare(
-        `INSERT INTO loop_steps (post_id,label,status,position,detail) VALUES (?, 'Reported with photo + GPS','done',0,?)`
-      ).run(post.id, post.place_name);
+  const fresh = await posts.mutate(req.params.id, (doc) => {
+    if (action === 'send_report') {
+      const agency = doc.ai?.category ? `District Works (${doc.ai.category})` : 'District Works';
+      if ((doc.loop || []).length === 0) {
+        addLoopStep(doc, { label: 'Reported with photo + GPS', status: 'done', detail: doc.placeName });
+      }
+      addLoopStep(doc, { label: `Routed to ${agency}`, status: 'active' });
+      doc.status = 'routed';
+    } else if (action === 'in_progress') {
+      addLoopStep(doc, { label: 'In progress · ETA 3 days', status: 'active' });
+      doc.status = 'in_progress';
+    } else if (action === 'resolve') {
+      addLoopStep(doc, { label: 'Resolved · loop closed', status: 'done' });
+      doc.status = 'resolved';
     }
-    addStep(`Routed to ${agency}`, null);
-    db.prepare("UPDATE posts SET status='routed' WHERE id=?").run(post.id);
-  } else if (action === 'in_progress') {
-    addStep('In progress · ETA 3 days', null);
-    db.prepare("UPDATE posts SET status='in_progress' WHERE id=?").run(post.id);
-  } else if (action === 'resolve') {
-    db.prepare("UPDATE loop_steps SET status='done' WHERE post_id=? AND status='active'").run(post.id);
-    const pos =
-      (db.prepare('SELECT MAX(position) AS m FROM loop_steps WHERE post_id = ?').get(post.id)
-        .m ?? -1) + 1;
-    db.prepare(
-      "INSERT INTO loop_steps (post_id,label,status,position) VALUES (?, 'Resolved · loop closed','done',?)"
-    ).run(post.id, pos);
-    db.prepare("UPDATE posts SET status='resolved' WHERE id=?").run(post.id);
-  } else {
-    return res.status(400).json({ error: 'Unknown action.' });
-  }
+    return doc;
+  });
 
-  const fresh = db.prepare('SELECT * FROM posts WHERE id = ?').get(post.id);
-  res.json({ post: shapePost(fresh, getViewer(req)) });
+  const viewer = await getViewer(req);
+  events.loopAdvanced(viewer, fresh, action, action === 'resolve');
+  res.json({ post: shapePost(fresh, viewer) });
 });
 
-router.post('/:id/comments', requireAuth, (req, res) => {
+router.post('/:id/comments', requireAuth, async (req, res) => {
   const { body } = req.body || {};
   if (!body || !body.trim()) return res.status(400).json({ error: 'Write something first.' });
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
-  if (!post) return res.status(404).json({ error: 'Not found.' });
-  db.prepare('INSERT INTO comments (post_id, user_id, body) VALUES (?,?,?)').run(
-    post.id,
-    req.userId,
-    body.trim()
-  );
+  const viewer = await getViewer(req);
+  const fresh = await posts.mutate(req.params.id, (doc) => {
+    addComment(doc, {
+      userId: req.userId,
+      body: body.trim(),
+      authorName: viewer?.name || 'Neighbour',
+      avatar: viewer?.avatar || '·',
+    });
+    return doc;
+  });
+  if (!fresh) return res.status(404).json({ error: 'Not found.' });
   res.status(201).json({ ok: true });
 });
 
-router.delete('/:id', requireAuth, (req, res) => {
-  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+router.delete('/:id', requireAuth, async (req, res) => {
+  const post = await posts.getById(req.params.id);
   if (!post) return res.status(404).json({ error: 'Not found.' });
-  if (post.user_id !== req.userId)
+  if (post.userId !== req.userId)
     return res.status(403).json({ error: 'You can only remove your own posts.' });
-  db.prepare('DELETE FROM posts WHERE id = ?').run(post.id);
+  await posts.del(req.params.id);
   res.json({ ok: true });
 });
 

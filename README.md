@@ -48,7 +48,11 @@ npm test          # API integration tests (isolated temp DB)
 
 | Method | Route | Notes |
 |---|---|---|
-| `POST` | `/api/auth/register` · `/login` · `/logout` | cookie session + bearer token |
+| `GET` | `/api/auth/config` | tells the SPA whether Google / gateway auth is enabled |
+| `GET` | `/api/auth/google/start` · `/google/callback` | Google sign-in via the OAuth gateway |
+| `POST` | `/api/auth/register` · `/verify` · `/resend-code` | email signup → SMTP code → verify |
+| `POST` | `/api/auth/login` · `/logout` | local demo accounts first, then the gateway |
+| `POST` | `/api/auth/forgot-password` · `/reset-password` · `/change-password` | password management (gateway + SMTP) |
 | `GET` | `/api/auth/me` · `PUT /api/auth/me/location` | current user / re-anchor location |
 | `GET` | `/api/posts` | `stream`, `sort=new\|near\|top`, `radius`, `mine`, `limit`, `offset` |
 | `GET` | `/api/posts/pins` · `/api/posts/:id` | map pins / single post + comments |
@@ -65,8 +69,26 @@ npm test          # API integration tests (isolated temp DB)
 |---|---|---|
 | `PORT` | `3000` | server port |
 | `JWT_SECRET` | dev fallback | sign session tokens (set in production) |
-| `OURBLOCK_DB` | `data/ourblock.db` | database path (`:memory:` for tests) |
-| `ANTHROPIC_API_KEY` | — | enables Claude-backed AI routing |
+| `OAUTH_GATEWAY_URL` | `https://oauth.xiangenhu.info` | OAuth2 & SMTP proxy gateway |
+| `OAUTH_ENABLED` | `on` | set `off` to use local-only bcrypt auth (no gateway/email) |
+| `PUBLIC_URL` | derived from request | this app's public origin, for the Google `redirect_uri` |
 
-Uploaded media is stored under `public/uploads/` and the SQLite database under `data/` —
-both are gitignored.
+## Authentication
+
+Sign-in is delegated to the **OAuth2 & SMTP Proxy Gateway**
+([oauth.xiangenhu.info](https://oauth.xiangenhu.info), see `/instruction`):
+
+- **Continue with Google** → `/api/auth/google/start` redirects to the gateway, which
+  handles Google consent and returns a token to `/api/auth/google/callback`; the app reads
+  the verified profile from the gateway and starts a session.
+- **Email + password** → `/register` asks the gateway to email a 6-digit code via its SMTP
+  proxy; `/verify` confirms it and signs the user in. `/forgot-password` + `/reset-password`
+  and `/change-password` round out account management — all SMTP-backed by the gateway.
+
+The gateway owns credentials and email delivery. Our Block keeps a lightweight **profile**
+record (keyed by email) so posts, reactions and stats reference a stable user id; it is
+upserted on every successful gateway auth. Seeded demo accounts (e.g. `ling@ourblock.org`)
+still sign in locally via bcrypt, so the demo works with `OAUTH_ENABLED=off` too.
+
+The gateway's own Google client id, JWT/session secrets and `GMAIL_APP_PASSWORD` are
+configured **on the gateway**, not in this app.
