@@ -146,6 +146,7 @@ export async function initI18n({ hint } = {}) {
   applyDir(lang);
   if (fromUrl) persist(lang);
   await loadDict(lang);
+  if (window.I18n) window.I18n.lang = _lang;
   return lang;
 }
 
@@ -163,5 +164,38 @@ export async function setUiLang(lang) {
   persist(c);
   applyDir(c);
   await loadDict(c);
+  if (window.I18n) window.I18n.lang = c;
+  // Notify non-module consumers (contextual-help.js) to re-translate any open UI.
+  try { window.dispatchEvent(new Event('i18n:languagechange')); } catch { /* no-op */ }
   return c;
+}
+
+/* ── Bridge for classic (non-module) scripts — contextual-help.js expects window.I18n with
+ *    { t, lang, applyTo, languages }. applyTo() translates [data-i18n] text nodes and
+ *    [data-i18n-attr="a,b"] attributes within a subtree, caching the English source so a
+ *    later re-apply (on language change) still works. */
+function applyNode(el) {
+  if (!el || el.nodeType !== 1) return;
+  if (el.hasAttribute('data-i18n')) {
+    let src = el.getAttribute('data-i18n');
+    if (!src) { src = (el.textContent || '').trim(); if (src) el.setAttribute('data-i18n', src); }
+    if (src) el.textContent = t(src);
+  }
+  const spec = el.getAttribute('data-i18n-attr');
+  if (spec) {
+    spec.split(',').map((s) => s.trim()).filter(Boolean).forEach((attr) => {
+      const key = 'data-i18n-src-' + attr;
+      let src = el.getAttribute(key);
+      if (src == null) { src = (el.getAttribute(attr) || '').trim(); if (src) el.setAttribute(key, src); }
+      if (src) el.setAttribute(attr, t(src));
+    });
+  }
+}
+function applyTo(root) {
+  if (!root || root.nodeType !== 1) return;
+  applyNode(root);
+  root.querySelectorAll('[data-i18n],[data-i18n-attr]').forEach(applyNode);
+}
+if (typeof window !== 'undefined') {
+  window.I18n = { t, lang: _lang, applyTo, languages: UI_LANGS_META.map((l) => ({ code: l.code, label: l.label })) };
 }
