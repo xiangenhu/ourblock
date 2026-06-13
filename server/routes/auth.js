@@ -138,36 +138,40 @@ router.post('/register', async (req, res) => {
     return res.json({ user: publicUser(user) });
   }
 
-  // Gateway registration → it emails a 6-digit verification code via the SMTP proxy.
+  // The SMTP gateway is shared across apps, so this email may already have a
+  // (verified) account there. Try logging in with the supplied password FIRST:
+  // if the neighbour is already in the gateway and the password matches, log them
+  // straight in — no second verification needed. Doing this before /register means
+  // we don't depend on the gateway's (inconsistent) "already registered" error
+  // shape to recognise an existing account.
+  try {
+    const out = await oauthGateway.login({ email, password });
+    const gwUser = out.user || {};
+    const user = await upsertUser({
+      email: gwUser.email || email,
+      name: gwUser.name || name,
+      nameCjk,
+      provider: 'email',
+      gatewayToken: out.token,
+    });
+    startSession(res, user);
+    return res.json({ user: publicUser(user) });
+  } catch (le) {
+    // 400/401 → no such account yet, or the password is wrong. We can't tell which,
+    // so fall through to registration. Any other error is a real gateway fault.
+    if (le.status !== 400 && le.status !== 401) return gatewayError(res, le);
+  }
+
+  // No matching account (or wrong password) → register. The gateway emails a 6-digit
+  // verification code via the SMTP proxy for a genuinely new email.
   try {
     const out = await oauthGateway.register({ name, email, password });
     res.json({ pendingVerification: true, email, message: out.message || 'Verification code sent to your email.' });
   } catch (e) {
-    // The SMTP gateway already knows this email (it's shared across apps, so the
-    // account may have been created — and verified — elsewhere). Don't make the
-    // neighbour register again: if the password they just typed matches the
-    // gateway's record, log them straight in and auto-create the local profile.
-    if (isAlreadyRegistered(e)) {
-      try {
-        const out = await oauthGateway.login({ email, password });
-        const gwUser = out.user || {};
-        const user = await upsertUser({
-          email: gwUser.email || email,
-          name: gwUser.name || name,
-          nameCjk,
-          provider: 'email',
-          gatewayToken: out.token,
-        });
-        startSession(res, user);
-        return res.json({ user: publicUser(user) });
-      } catch (le) {
-        // Email exists but the password doesn't match (or it's still unverified):
-        // send them to sign-in / reset rather than silently failing.
-        if (le.status === 400 || le.status === 401)
-          return res.status(409).json({ error: 'That email is already registered. Try signing in instead.' });
-        return gatewayError(res, le);
-      }
-    }
+    // The account exists but the login above didn't match → wrong password (or it's
+    // still unverified). Send them to sign-in / reset rather than silently failing.
+    if (isAlreadyRegistered(e))
+      return res.status(409).json({ error: 'That email is already registered. Try signing in instead.' });
     gatewayError(res, e);
   }
 });
