@@ -348,7 +348,10 @@ a{color:inherit}
 /* ============================ landing (anonymous) ============================ */
 .landing{max-width:1080px;margin:0 auto;padding:0 20px 60px}
 .land-top{display:flex;align-items:center;justify-content:space-between;padding:18px 2px 10px;position:sticky;top:0;background:linear-gradient(var(--paper) 70%,transparent);z-index:20}
-.land-top .brand{cursor:pointer}
+/* The base .brand is white (for the dark rail); on the light landing/auth header it must be
+   dark or it vanishes on the light background. */
+.land-top .brand{cursor:pointer;color:var(--green)}
+.land-top .brand small{color:var(--green-2)}
 .land-login{width:auto;padding:9px 18px}
 .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
 .btn.ghost:hover{border-color:var(--green-2)}
@@ -407,3 +410,83 @@ a{color:inherit}
 @media(max-width:720px){
   .land-cols{grid-template-columns:1fr}
 }
+
+/* ============================ LIQUID GLASS THEME ============================
+   Activated by <html data-theme="glass">. Translucent, blurred surfaces over a
+   colourful fixed gradient — frosted "liquid glass". Tokens are overridden so the
+   many components that already reference var(--card)/--line/etc. inherit the look. */
+:root[data-theme="glass"]{
+  --card:rgba(255,255,255,.50);
+  --paper:rgba(255,255,255,.20);
+  --paper-2:rgba(255,255,255,.38);
+  --line:rgba(255,255,255,.55);
+  --green:rgba(24,42,34,.50);
+  --green-2:rgba(38,76,63,.64);
+  --green-tint:rgba(255,255,255,.42);
+  --good-tint:rgba(255,234,182,.55);
+  --care-tint:rgba(255,212,188,.55);
+  --shadow:0 20px 50px -20px rgba(20,30,55,.45);
+  --shadow-sm:0 10px 30px -16px rgba(20,30,55,.4);
+}
+:root[data-theme="glass"] body{
+  background:
+    radial-gradient(1000px 700px at 8% 4%, rgba(126,176,255,.55), transparent 58%),
+    radial-gradient(900px 760px at 96% 8%, rgba(255,150,205,.50), transparent 55%),
+    radial-gradient(1000px 900px at 50% 108%, rgba(120,226,196,.55), transparent 55%),
+    linear-gradient(135deg,#cdd9ff 0%,#ffd4ec 48%,#c9f3ec 100%);
+  background-attachment:fixed;
+}
+/* Frost the main surfaces (blur whatever sits behind, add a glassy rim + top highlight) */
+:root[data-theme="glass"] .card,
+:root[data-theme="glass"] .panel,
+:root[data-theme="glass"] .rail,
+:root[data-theme="glass"] .side,
+:root[data-theme="glass"] .map-card,
+:root[data-theme="glass"] .post,
+:root[data-theme="glass"] .lcard,
+:root[data-theme="glass"] .modal-card,
+:root[data-theme="glass"] .auth-card,
+:root[data-theme="glass"] .locbar,
+:root[data-theme="glass"] .capture-cta,
+:root[data-theme="glass"] .mobile-top,
+:root[data-theme="glass"] .land-top,
+:root[data-theme="glass"] .pnav,
+:root[data-theme="glass"] .suggest,
+:root[data-theme="glass"] .ai-preview,
+:root[data-theme="glass"] .modal-locked,
+:root[data-theme="glass"] .viewfinder{
+  backdrop-filter:blur(20px) saturate(170%);
+  -webkit-backdrop-filter:blur(20px) saturate(170%);
+  border:1px solid rgba(255,255,255,.5);
+  box-shadow:0 8px 32px rgba(20,30,55,.18), inset 0 1px 0 rgba(255,255,255,.65), inset 0 -1px 0 rgba(255,255,255,.12);
+}
+:root[data-theme="glass"] .side{background:rgba(255,255,255,.30);border-left:1px solid rgba(255,255,255,.5)}
+:root[data-theme="glass"] .main{background:transparent}
+/* Controls get a lighter frost */
+:root[data-theme="glass"] .btn.primary{box-shadow:0 6px 18px rgba(20,40,32,.28), inset 0 1px 0 rgba(255,255,255,.35);backdrop-filter:blur(8px) saturate(150%);-webkit-backdrop-filter:blur(8px) saturate(150%)}
+:root[data-theme="glass"] .pill,
+:root[data-theme="glass"] .rbtn,
+:root[data-theme="glass"] .seg,
+:root[data-theme="glass"] .lang-switch,
+:root[data-theme="glass"] .style-lang,
+:root[data-theme="glass"] .style-chip,
+:root[data-theme="glass"] .theme-toggle,
+:root[data-theme="glass"] .btn.ghost,
+:root[data-theme="glass"] .btn.google{
+  background:rgba(255,255,255,.5);
+  backdrop-filter:blur(12px) saturate(160%);
+  -webkit-backdrop-filter:blur(12px) saturate(160%);
+  border:1px solid rgba(255,255,255,.55);
+}
+:root[data-theme="glass"] .field input,
+:root[data-theme="glass"] .field textarea{background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.6)}
+:root[data-theme="glass"] .field input:focus,
+:root[data-theme="glass"] .field textarea:focus{background:rgba(255,255,255,.78)}
+/* Frosted dim behind the popup */
+:root[data-theme="glass"] .modal-overlay{background:rgba(38,40,60,.34);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+
+/* theme toggle button (shares the row with the language switcher) */
+.theme-toggle{font-size:15px;line-height:1;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:6px 9px;cursor:pointer}
+.theme-toggle:focus{outline:none;border-color:var(--green-2)}
+.theme-toggle.compact{padding:5px 8px;font-size:14px}
+.rail .theme-toggle{width:100%}
