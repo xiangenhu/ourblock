@@ -14,7 +14,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { sign, setAuthCookie, clearAuthCookie, requireAuth } from '../auth.js';
+import { sign, setAuthCookie, clearAuthCookie, requireAuth, isAdminEmail } from '../auth.js';
 import { users } from '../store/repo.js';
 import store from '../store/gcs.js';
 import events from '../xapi/events.js';
@@ -38,6 +38,7 @@ function publicUser(u) {
     avatar: u.avatar,
     provider: u.provider || 'email',
     picture: u.picture || null,
+    isAdmin: isAdminEmail(u.email), // steward tier (TEACHER_EMAILS); drives admin-only UI
   };
 }
 

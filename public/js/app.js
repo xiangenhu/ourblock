@@ -353,6 +353,58 @@ function landingMap(samples) {
   return card;
 }
 
+/* ----------------------------------------------- AI writing-style composer */
+// The browser's language → primary subtag ("zh-CN" → "zh"), used to fetch the right
+// culturally-iconic style chips and to tell the model which language to write in.
+function uiLang() {
+  return (navigator.language || 'en').toLowerCase().split(/[-_]/)[0];
+}
+
+// Renders a row of culturally-iconic writing-style chips (鲁迅风格 / 古文 / 李白 … in Chinese,
+// Shakespeare / Hemingway … in English, etc.) and wires each to the LLM composer. Tapping a
+// chip rewrites the title + description from the photo and/or note in that voice. Styles come
+// from the server, localised to the browser's language; if none load, the row is silently
+// skipped (manual entry still works). `host` is where the row is appended.
+async function mountStyleComposer(host, { getFile, getNote, stream, fill, busy }) {
+  const lang = uiLang();
+  let styles = [];
+  try { ({ styles = [] } = await api.get(`/api/ai/styles?lang=${encodeURIComponent(lang)}`)); }
+  catch { return; }
+  if (!styles.length) return;
+
+  const row = h(`<div class="style-row">
+      <span class="style-lead">${ICONS.spark}<b>Write it as…</b></span>
+      <div class="style-chips"></div>
+    </div>`);
+  const chips = row.querySelector('.style-chips');
+  let seq = 0;
+  styles.forEach((s) => {
+    const chip = h(`<button type="button" class="style-chip" data-id="${esc(s.id)}"${s.hint ? ` title="${esc(s.hint)}"` : ''}>${esc(s.label)}</button>`);
+    chip.onclick = async () => {
+      const file = getFile();
+      const note = (getNote() || '').trim();
+      if (!file && !note) { toast('Add a photo or a note first', ''); return; }
+      const my = ++seq;
+      chips.querySelectorAll('.style-chip').forEach((c) => c.classList.toggle('on', c === chip));
+      chip.classList.add('busy');
+      busy?.(true, s.label);
+      try {
+        const streamNow = typeof stream === 'function' ? stream() : stream;
+        const { title, description } = await api.compose({ file, note, stream: streamNow, lang, style: s.id });
+        if (my !== seq) return; // a newer pick superseded this one
+        fill({ title, description, label: s.label });
+      } catch (e) {
+        toast(e.message || 'AI is unavailable right now', 'err');
+      } finally {
+        chip.classList.remove('busy');
+        busy?.(false);
+      }
+    };
+    chips.appendChild(chip);
+  });
+  host.appendChild(row);
+}
+
 /* --------------------------------------------------- anonymous "share the good" */
 function renderAnonShare() {
   app.innerHTML = '';
@@ -451,6 +503,27 @@ function renderAnonShare() {
     } catch (err) { aiBox.classList.add('hidden'); toast(err.message, 'err'); }
   }
   view.querySelector('[data-ai]').onclick = compose;
+
+  // Culturally-iconic style chips — tapping one rewrites the title + description in that voice.
+  const styleHost = h('<div class="style-host"></div>');
+  aiBox.after(styleHost);
+  mountStyleComposer(styleHost, {
+    getFile: () => draft.file,
+    getNote: () => noteInput.value,
+    stream: 'good',
+    busy: (on, label) => {
+      if (!on) return;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `<b>✍️ Writing as ${esc(label)}…</b>`;
+    },
+    fill: ({ title, description, label }) => {
+      if (title) titleInput.value = title;       // styled picks intentionally replace the fields
+      if (description) descInput.value = description;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `<b>✍️ ${esc(label)} — edit anything before posting.</b>`;
+      refresh();
+    },
+  });
 
   postBtn.onclick = async () => {
     if (!draft.coords) { toast('Turn on location first', 'err'); return; }
@@ -751,33 +824,61 @@ async function loadFeed(feed, countEl, offset = 0) {
 }
 
 /* --------------------------------------------------------------- post card */
+// Proximity reveal — "Our Block" is hyper-local: you can only read a message's full text
+// and photo when you're near where it was posted. The thumbnail and title still show (with
+// the measured distance) so neighbours know something is there. Owners and admins are never
+// gated; an unknown distance (no viewer location) reveals, so the app still works offline.
+const REVEAL_RADIUS_M = 500;
+const REVEAL_LABEL = '500 m';
+function canReveal(p) {
+  if (state.user && (p.author?.id === state.user.id || state.user.isAdmin)) return true;
+  return p.distanceM == null || p.distanceM <= REVEAL_RADIUS_M;
+}
+
 function postCard(p) {
   const g = p.stream === 'good';
-  const card = h(`<article class="post"></article>`);
-
-  const media = h(`<div class="media ${g ? 'g' : 'c'}"></div>`);
-  if (p.mediaUrl) {
-    media.appendChild(p.mediaType === 'video'
-      ? h(`<video src="${esc(p.mediaUrl)}" muted playsinline preload="metadata"></video>`)
-      : h(`<img src="${esc(p.mediaUrl)}" alt="">`));
-  }
-  if (p.mediaType === 'video') media.appendChild(h(`<div class="play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>`));
-  if (p.ai?.tag) media.appendChild(h(`<span class="ai-tag">${ICONS.spark}${esc(p.ai.tag)}</span>`));
-  if (p.stream === 'care' && p.status !== 'open')
-    media.appendChild(h(`<span class="status-tag ${p.status}">${esc(STATUS_LABEL[p.status])}</span>`));
-  media.appendChild(h(`<span class="badge">${p.mediaType === 'video' ? `▶ Video${p.durationS ? ' · 0:' + String(p.durationS).padStart(2, '0') : ''}` : '◎ Photo'}</span>`));
-  media.onclick = () => go(`post/${p.id}`);
-  card.appendChild(media);
+  const card = h(`<article class="post compact"></article>`);
+  const far = !canReveal(p);
 
   const body = h(`<div class="pbody"></div>`);
   const title = h(`<h3>${esc(p.title)}</h3>`);
-  title.onclick = () => go(`post/${p.id}`);
+  title.onclick = () => openPostModal(p);
   body.appendChild(title);
   body.appendChild(h(`<div class="pmeta">
       <span>📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
       <span>· by ${esc(p.author?.name || 'Neighbour')}</span>
       <span>· ${timeAgo(p.createdAt)}</span>
     </div>`));
+
+  // Tags that used to overlay the photo banner now sit above the message.
+  const tags = h(`<div class="ptags"></div>`);
+  if (p.ai?.tag) tags.appendChild(h(`<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>`));
+  if (p.stream === 'care' && p.status !== 'open')
+    tags.appendChild(h(`<span class="status-tag ${p.status}">${esc(STATUS_LABEL[p.status])}</span>`));
+  if (tags.children.length) body.appendChild(tags);
+
+  // Message: a small thumbnail beside the description. The photo/video is no longer shown
+  // full-size in the feed — tapping the thumbnail or text opens the popup. When the viewer
+  // is too far from where it was posted, the thumbnail is blurred and the text is withheld.
+  const msg = h(`<div class="pmsg${far ? ' locked' : ''}"></div>`);
+  if (p.mediaUrl) {
+    const thumb = h(`<button class="pthumb ${g ? 'g' : 'c'}${far ? ' locked' : ''}" type="button" aria-label="View full message">
+      ${p.mediaType === 'video'
+        ? `<video src="${esc(p.mediaUrl)}#t=0.1" muted playsinline preload="metadata"></video><span class="thumb-play">▶</span>`
+        : `<img src="${esc(p.mediaUrl)}" alt="" loading="lazy">`}
+      ${far ? '<span class="thumb-lock">🔒</span>' : ''}
+    </button>`);
+    thumb.onclick = () => openPostModal(p);
+    msg.appendChild(thumb);
+  }
+  const desc = far
+    ? h(`<p class="pdesc locked-note">🔒 ${p.distanceM != null ? dist(p.distanceM) + ' away' : 'Nearby'} — come within ${REVEAL_LABEL} of where it was posted to read it.</p>`)
+    : p.body
+      ? h(`<p class="pdesc">${esc(p.body)}</p>`)
+      : h(`<p class="pdesc muted">${p.mediaUrl ? 'Tap to read the full message.' : ''}</p>`);
+  desc.onclick = () => openPostModal(p);
+  msg.appendChild(desc);
+  body.appendChild(msg);
 
   // AI action suggestion for care items routed to the city
   if (p.stream === 'care' && p.ai?.action === 'city' && p.status === 'open') {
@@ -788,6 +889,77 @@ function postCard(p) {
   body.appendChild(reactionRow(p, card));
   card.appendChild(body);
   return card;
+}
+
+/* A lightweight popup showing the full message + full-size photo/video. Tapping a feed
+ * card's thumbnail, title, or description opens it; the full detail page (with replies)
+ * is one tap away. Closes on ×, backdrop click, or Escape. */
+let _modalEsc = null;
+function openPostModal(p) {
+  const g = p.stream === 'good';
+  const far = !canReveal(p); // too far from where it was posted → withhold photo + full text
+  const overlay = h(`<div class="modal-overlay"></div>`);
+  const cardEl = h(`<div class="modal-card"></div>`);
+
+  if (p.mediaUrl && !far) {
+    const media = h(`<div class="modal-media"></div>`);
+    media.appendChild(p.mediaType === 'video'
+      ? h(`<video src="${esc(p.mediaUrl)}" controls autoplay playsinline></video>`)
+      : h(`<img src="${esc(p.mediaUrl)}" alt="">`));
+    cardEl.appendChild(media);
+  }
+  cardEl.appendChild(h(`<div class="modal-text">
+      <div class="ptags">
+        <span class="badge-stream ${g ? 'g' : 'c'}">${g ? '✦ The Good' : '△ Needs Care'}</span>
+        ${p.ai?.tag ? `<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>` : ''}
+        ${p.stream === 'care' && p.status !== 'open' ? `<span class="status-tag ${p.status}">${esc(STATUS_LABEL[p.status])}</span>` : ''}
+      </div>
+      <h2>${esc(p.title)}</h2>
+      <div class="pmeta">
+        <span>📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
+        <span>· by ${esc(p.author?.name || 'Neighbour')}</span>
+        <span>· ${timeAgo(p.createdAt)}</span>
+      </div>
+      ${far
+        ? `<div class="modal-locked">🔒<div><b>${p.distanceM != null ? dist(p.distanceM) + ' away' : 'You’re not nearby'}</b>
+             <p>This message and its photo unlock when you’re within ${REVEAL_LABEL} of where it was posted.</p></div></div>`
+        : (p.body ? `<p class="pdesc">${esc(p.body)}</p>` : '')}
+      <div class="modal-actions">
+        ${far ? '' : `<a class="modal-open-full" href="#/post/${p.id}">Open full post &amp; replies ›</a>`}
+      </div>
+    </div>`));
+
+  const close = h(`<button class="modal-close" type="button" aria-label="Close">×</button>`);
+  cardEl.appendChild(close);
+  overlay.appendChild(cardEl);
+
+  const dismiss = () => {
+    overlay.remove();
+    if (_modalEsc) { document.removeEventListener('keydown', _modalEsc); _modalEsc = null; }
+  };
+
+  // Owner or admin (TEACHER_EMAILS) can delete; admin can remove any post.
+  const isOwner = state.user && p.author?.id === state.user.id;
+  if (state.user && (isOwner || state.user.isAdmin)) {
+    const del = h(`<button class="modal-del" type="button">🗑 ${isOwner ? 'Remove' : 'Delete (admin)'}</button>`);
+    del.onclick = async () => {
+      if (!confirm(isOwner ? 'Remove this post? This cannot be undone.' : 'Delete this neighbour’s post as admin? This cannot be undone.')) return;
+      try {
+        await api.del(`/api/posts/${p.id}`);
+        toast('Post removed', 'ok');
+        dismiss();
+        render(); // refresh the feed so the deleted card disappears
+      } catch (e) { toast(e.message, 'err'); }
+    };
+    cardEl.querySelector('.modal-actions').appendChild(del);
+  }
+  close.onclick = dismiss;
+  overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+  cardEl.querySelector('.modal-open-full').onclick = dismiss; // the hash change routes to detail
+  _modalEsc = (e) => { if (e.key === 'Escape') dismiss(); };
+  document.addEventListener('keydown', _modalEsc);
+
+  document.body.appendChild(overlay);
 }
 
 function reactionRow(p, cardEl) {
@@ -1208,7 +1380,7 @@ function captureView() {
   const form = h(`
     <div class="card">
       <div class="field"><label>Title</label><input name="title" placeholder="What did you notice?"></div>
-      <div class="field"><label>A little more (optional)</label><input name="body" placeholder="Add context for your neighbours"></div>
+      <div class="field"><label>A little more (optional)</label><textarea name="body" rows="2" placeholder="Add context for your neighbours"></textarea></div>
       <div class="ai-preview hidden">${ICONS.spark}<div class="ai-text"></div></div>
       <button class="btn primary" disabled>Post to the block</button>
     </div>`);
@@ -1222,6 +1394,27 @@ function captureView() {
   const refreshSubmit = () => { submit.disabled = !titleInput.value.trim() || !draft.file || !draft.coords || draft.geoFar; };
   titleInput.oninput = refreshSubmit;
   wrap.appendChild(form);
+
+  // Culturally-iconic style chips — tapping one (re)writes the title + body in that voice.
+  const styleHost = h('<div class="style-host"></div>');
+  aiBox.after(styleHost);
+  mountStyleComposer(styleHost, {
+    getFile: () => draft.file,
+    getNote: () => bodyInput.value, // reuse whatever context the neighbour already typed
+    stream: () => draft.stream,     // read live — the neighbour may switch Care/Good after mount
+    busy: (on, label) => {
+      if (!on) return;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `<b>✍️ Writing as ${esc(label)}…</b>`;
+    },
+    fill: ({ title, description, label }) => {
+      if (title) titleInput.value = title;       // styled picks intentionally replace the fields
+      if (description) bodyInput.value = description;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `<b>✍️ ${esc(label)}</b><p>Edit anything before you post.</p>`;
+      refreshSubmit();
+    },
+  });
 
   // Ask the vision model to suggest a title + description from the photo. Fills only
   // empty fields (never clobbers what the neighbour typed) and stays fully editable.
@@ -1334,16 +1527,19 @@ function postDetailView() {
   api.get(`/api/posts/${state.postId}`).then(({ post: p, comments }) => {
     slot.innerHTML = '';
     const g = p.stream === 'good';
+    const far = !canReveal(p); // gate photo + full text on proximity (owner/admin exempt)
 
-    const media = h(`<div class="detail-media ${p.mediaUrl ? '' : (g ? 'g' : 'c')}"></div>`);
-    if (p.mediaUrl) {
+    if (p.mediaUrl && !far) {
+      const media = h(`<div class="detail-media"></div>`);
       media.appendChild(p.mediaType === 'video'
         ? h(`<video src="${esc(p.mediaUrl)}" controls playsinline></video>`)
         : h(`<img src="${esc(p.mediaUrl)}" alt="">`));
-    } else {
+      slot.appendChild(media);
+    } else if (!far) {
+      const media = h(`<div class="detail-media ${g ? 'g' : 'c'}"></div>`);
       media.appendChild(h(`<span class="badge" style="position:absolute;bottom:10px;left:10px">${p.mediaType === 'video' ? '▶ Video' : '◎ Photo'}</span>`));
+      slot.appendChild(media);
     }
-    slot.appendChild(media);
     const dm = detailMap(p);
     if (dm) slot.appendChild(dm);
 
@@ -1355,13 +1551,17 @@ function postDetailView() {
         </div>
         <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${esc(p.title)}</h2>
         <div class="pmeta">📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · by ${esc(p.author?.name || 'Neighbour')} · ${timeAgo(p.createdAt)}</div>
-        ${p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : ''}
+        ${far
+          ? `<div class="modal-locked" style="margin-top:10px">🔒<div><b>${p.distanceM != null ? dist(p.distanceM) + ' away' : 'You’re not nearby'}</b>
+               <p>This message and its photo unlock when you’re within ${REVEAL_LABEL} of where it was posted.</p></div></div>`
+          : (p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : '')}
       </div>`);
     card.appendChild(reactionRow(p, card));
-    if (p.author?.id === state.user.id) {
-      const del = h(`<button class="rbtn" style="margin-top:10px;border-color:var(--care);color:var(--care)">🗑 Remove this post</button>`);
+    const isOwner = p.author?.id === state.user.id;
+    if (isOwner || state.user.isAdmin) {
+      const del = h(`<button class="rbtn" style="margin-top:10px;border-color:var(--care);color:var(--care)">🗑 ${isOwner ? 'Remove this post' : 'Delete post (admin)'}</button>`);
       del.onclick = async () => {
-        if (!confirm('Remove this post? This cannot be undone.')) return;
+        if (!confirm(isOwner ? 'Remove this post? This cannot be undone.' : 'Delete this neighbour’s post as admin? This cannot be undone.')) return;
         try { await api.del(`/api/posts/${p.id}`); toast('Post removed', 'ok'); go('near'); }
         catch (e) { toast(e.message, 'err'); }
       };
