@@ -61,6 +61,29 @@ function langSwitcher(cls = '') {
   return sel;
 }
 
+/* Theme: 'glass' (liquid glass, default) or 'light'. Applied as <html data-theme>; it's pure
+ * CSS, so toggling restyles everything live with no re-render. The initial value is also set
+ * by an inline script in index.html to avoid a flash before this module loads. */
+function currentTheme() {
+  try { return localStorage.getItem('ob.theme') || 'glass'; } catch { return 'glass'; }
+}
+function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', 'glass');
+  try { localStorage.setItem('ob.theme', theme); } catch { /* private mode */ }
+}
+function themeToggle(cls = '') {
+  const btn = h(`<button class="theme-toggle ${cls}" type="button"></button>`);
+  const paint = () => {
+    const glass = currentTheme() === 'glass';
+    btn.textContent = glass ? '🪟' : '☀️';
+    btn.title = glass ? t('Liquid glass theme — tap for light') : t('Light theme — tap for glass');
+  };
+  paint();
+  btn.onclick = () => { applyTheme(currentTheme() === 'glass' ? 'light' : 'glass'); paint(); };
+  return btn;
+}
+
 function routeFromHash() {
   const hash = location.hash.replace(/^#\/?/, '');
   const [seg, id] = hash.split('/');
@@ -265,7 +288,7 @@ function anonTopBar() {
     </header>`);
   bar.querySelector('[data-home]').onclick = () => go('');
   bar.querySelector('.land-login').onclick = () => go('login');
-  bar.querySelector('.land-top-right').prepend(langSwitcher('compact'));
+  bar.querySelector('.land-top-right').prepend(langSwitcher('compact'), themeToggle('compact'));
   return bar;
 }
 
@@ -474,24 +497,24 @@ function renderAnonShare() {
 
   const view = h(`
     <section class="share-view">
-      <a class="back-link" data-back>‹ Back to explore</a>
-      <h1>Share something good ✦</h1>
-      <p class="share-sub">Savour what your neighbours are doing well. A photo is required as evidence, and your location is attached so it lands on the block. No account needed.</p>
-      <div class="loc-status" data-loc>Requesting your location…</div>
+      <a class="back-link" data-back>‹ ${esc(t('Back to explore'))}</a>
+      <h1>${esc(t('Share something good'))} ✦</h1>
+      <p class="share-sub">${esc(t('Savour what your neighbours are doing well. A photo is required as evidence, and your location is attached so it lands on the block. No account needed.'))}</p>
+      <div class="loc-status" data-loc>${esc(t('Requesting your location…'))}</div>
 
-      <label class="photo-cta">${ICONS.camera}<span><b>Take a photo</b><small>Required as evidence — the AI writes the title &amp; description from it</small></span>
+      <label class="photo-cta">${ICONS.camera}<span><b>${esc(t('Take a photo'))}</b><small>${esc(t('Required as evidence — the AI writes the title & description from it'))}</small></span>
         <input type="file" accept="image/*" capture="environment" hidden></label>
       <div class="vf-preview hidden"></div>
       <div class="geo-check hidden"></div>
 
       <div class="card">
-        <div class="field"><label>Add a note <small>(optional)</small></label><input name="note" placeholder="anything extra for your neighbours"></div>
-        <button class="btn ghost" data-ai>${ICONS.spark} Suggest title &amp; description</button>
+        <div class="field"><label>${esc(t('Add a note'))} <small>${esc(t('(optional)'))}</small></label><input name="note" placeholder="${esc(t('anything extra for your neighbours'))}"></div>
+        <button class="btn ghost" data-ai>${ICONS.spark} ${esc(t('Suggest title & description'))}</button>
         <div class="ai-preview hidden">${ICONS.spark}<div class="ai-text"></div></div>
-        <div class="field"><label>Title</label><input name="title" placeholder="A short title"></div>
-        <div class="field"><label>Description <small>(50 words or less)</small></label><textarea name="desc" rows="3" placeholder="A warm line for your neighbours"></textarea></div>
-        <button class="btn primary" data-post disabled>Post to the block</button>
-        <div class="share-foot">Want to flag something that needs care? <a data-login>Log in</a>.</div>
+        <div class="field"><label>${esc(t('Title'))}</label><input name="title" placeholder="${esc(t('A short title'))}"></div>
+        <div class="field"><label>${esc(t('Description'))} <small>${esc(t('(50 words or less)'))}</small></label><textarea name="desc" rows="3" placeholder="${esc(t('A warm line for your neighbours'))}"></textarea></div>
+        <button class="btn primary" data-post disabled>${esc(t('Post to the block'))}</button>
+        <div class="share-foot">${tf('Want to flag something that needs care? {login}.', { login: `<a data-login>${esc(t('Log in'))}</a>` })}</div>
       </div>
     </section>`);
   wrap.appendChild(view);
@@ -519,15 +542,15 @@ function renderAnonShare() {
   // location is mandatory for any post
   const setLoc = (txt, ok) => { locEl.textContent = txt; locEl.classList.toggle('ok', !!ok); };
   function requestLoc() {
-    if (!navigator.geolocation) { setLoc('Location isn’t available on this device — you can’t post here.', false); return; }
-    setLoc('Requesting your location…', false);
+    if (!navigator.geolocation) { setLoc(t('Location isn’t available on this device — you can’t post here.'), false); return; }
+    setLoc(t('Requesting your location…'), false);
     navigator.geolocation.getCurrentPosition(async (pos) => {
       draft.coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       const geo = await reverseGeocode(draft.coords.lat, draft.coords.lng);
       draft.place = geo?.placeName || `${draft.coords.lat.toFixed(4)}, ${draft.coords.lng.toFixed(4)}`;
       setLoc(`📍 ${draft.place}`, true);
       verifyPhotoGeo(draft, geoEl, refresh); // recheck the photo against this location
-    }, () => setLoc('Turn on location to post to the block — tap to retry.', false),
+    }, () => setLoc(t('Turn on location to post to the block — tap to retry.'), false),
     { enableHighAccuracy: true, timeout: 8000 });
   }
   locEl.onclick = requestLoc;
@@ -540,7 +563,7 @@ function renderAnonShare() {
     draft.file = file;
     preview.classList.remove('hidden');
     preview.innerHTML = '';
-    preview.appendChild(h(`<img src="${URL.createObjectURL(file)}" alt="preview">`));
+    preview.appendChild(h(`<img src="${URL.createObjectURL(file)}" alt="${esc(t('preview'))}">`));
     refresh();
     compose();
     draft.photoGps = null;
@@ -550,16 +573,16 @@ function renderAnonShare() {
   // AI compose (from the photo and/or the note)
   let seq = 0;
   async function compose() {
-    if (!draft.file && !noteInput.value.trim()) { toast('Take a photo or write a few words first', ''); return; }
+    if (!draft.file && !noteInput.value.trim()) { toast(t('Take a photo or write a few words first'), ''); return; }
     const my = ++seq;
     aiBox.classList.remove('hidden');
-    aiText.innerHTML = '<b>Thinking…</b>';
+    aiText.innerHTML = `<b>${esc(t('Thinking…'))}</b>`;
     try {
       const { title, description } = await api.compose({ file: draft.file, note: noteInput.value.trim(), stream: 'good', lang: currentLang() });
       if (my !== seq) return;
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !descInput.value.trim()) descInput.value = description;
-      aiText.innerHTML = '<b>Suggested — edit anything before posting.</b>';
+      aiText.innerHTML = `<b>${esc(t('Suggested — edit anything before posting.'))}</b>`;
       refresh();
     } catch (err) { aiBox.classList.add('hidden'); toast(err.message, 'err'); }
   }
@@ -575,20 +598,20 @@ function renderAnonShare() {
     busy: (on, label) => {
       if (!on) return;
       aiBox.classList.remove('hidden');
-      aiText.innerHTML = `<b>✍️ Writing as ${esc(label)}…</b>`;
+      aiText.innerHTML = `✍️ <b>${tf('Writing as {label}…', { label: esc(label) })}</b>`;
     },
     fill: ({ title, description, label }) => {
       if (title) titleInput.value = title;       // styled picks intentionally replace the fields
       if (description) descInput.value = description;
       aiBox.classList.remove('hidden');
-      aiText.innerHTML = `<b>✍️ ${esc(label)} — edit anything before posting.</b>`;
+      aiText.innerHTML = `✍️ <b>${esc(label)}</b> — ${esc(t('edit anything before posting.'))}`;
       refresh();
     },
   });
 
   postBtn.onclick = async () => {
-    if (!draft.coords) { toast('Turn on location first', 'err'); return; }
-    postBtn.disabled = true; postBtn.textContent = 'Posting…';
+    if (!draft.coords) { toast(t('Turn on location first'), 'err'); return; }
+    postBtn.disabled = true; postBtn.textContent = t('Posting…');
     try {
       let mediaUrl = null, mediaType = 'photo';
       if (draft.file) { const u = await api.upload(draft.file); mediaUrl = u.url; mediaType = u.mediaType; }
@@ -600,11 +623,11 @@ function renderAnonShare() {
         lat: draft.coords.lat, lng: draft.coords.lng,
         placeName: draft.place,
       });
-      toast('Posted to your block ✦', 'ok');
+      toast(t('Posted to your block') + ' ✦', 'ok');
       go(`post/${post.id}`);
     } catch (err) {
       toast(err.message, 'err');
-      postBtn.disabled = false; postBtn.textContent = 'Post to the block';
+      postBtn.disabled = false; postBtn.textContent = t('Post to the block');
     }
   };
 }
@@ -713,7 +736,7 @@ function renderShell(centerNode) {
     item.onclick = () => go(n.key);
     navSlot.appendChild(item);
   });
-  rail.querySelector('.rail-foot').appendChild(langSwitcher());
+  rail.querySelector('.rail-foot').append(langSwitcher(), themeToggle());
   rail.querySelector('.signout').onclick = signOut;
   rail.querySelector('.me').onclick = openAccount;
   rail.querySelector('.me').style.cursor = 'pointer';
@@ -737,7 +760,7 @@ function mobileTop() {
   const right = h(`<div class="mobile-top-right"></div>`);
   const out = h(`<button class="signout" style="width:auto;padding:7px 12px;background:var(--card);color:var(--ink-soft);border-color:var(--line)">${esc(t('Sign out'))}</button>`);
   out.onclick = signOut;
-  right.append(langSwitcher('compact'), out);
+  right.append(langSwitcher('compact'), themeToggle('compact'), out);
   bar.appendChild(right);
   return bar;
 }
