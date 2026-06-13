@@ -821,17 +821,17 @@ function feedView() {
   wrap.appendChild(h(`
     <div class="locbar">
       <div class="gps">${ICONS.pin.replace('currentColor', '#234E3F')}</div>
-      <div><b>${esc(state.user.neighborhood || 'Your area')}</b><span>Showing places near you</span></div>
+      <div><b>${esc(state.user.neighborhood || t('Your area'))}</b><span>${esc(t('Showing places near you'))}</span></div>
       <span class="live"></span>
     </div>`));
 
   // header + stream toggle
   const top = h(`
     <div class="toprow">
-      <h2>${isNear ? 'Near Me' : meta.title}<small class="count-sub">…</small></h2>
+      <h2>${isNear ? esc(t('Near Me')) : esc(t(meta.title))}<small class="count-sub">…</small></h2>
       <div class="seg">
-        <button class="${state.stream === 'good' ? 'on good' : 'good'}" data-s="good">✦ The Good</button>
-        <button class="${state.stream === 'care' ? 'on care' : 'care'}" data-s="care">△ Needs Care</button>
+        <button class="${state.stream === 'good' ? 'on good' : 'good'}" data-s="good">✦ ${esc(t('The Good'))}</button>
+        <button class="${state.stream === 'care' ? 'on care' : 'care'}" data-s="care">△ ${esc(t('Needs Care'))}</button>
       </div>
     </div>`);
   top.querySelectorAll('[data-s]').forEach((b) => {
@@ -842,9 +842,9 @@ function feedView() {
   // sort pills
   const sorts = h(`
     <div class="sortbar">
-      <span class="lbl">Sort</span>
+      <span class="lbl">${esc(t('Sort'))}</span>
       ${[['near', 'Nearest'], ['new', 'Newest'], ['top', 'Most cheered']]
-        .map(([k, l]) => `<button class="pill ${state.sort === k ? 'on' : ''}" data-sort="${k}">${l}</button>`).join('')}
+        .map(([k, l]) => `<button class="pill ${state.sort === k ? 'on' : ''}" data-sort="${k}">${esc(t(l))}</button>`).join('')}
     </div>`);
   sorts.querySelectorAll('[data-sort]').forEach((b) => {
     b.onclick = () => { state.sort = b.dataset.sort; render(); };
@@ -869,20 +869,20 @@ async function loadFeed(feed, countEl, offset = 0) {
     );
     if (offset === 0) feed.innerHTML = '';
     else feed.querySelector('.load-more-wrap')?.remove();
-    if (countEl) countEl.textContent = `${total} ${state.stream === 'good' ? 'good things nearby' : 'places that need care'}`;
+    if (countEl) countEl.textContent = tf(state.stream === 'good' ? '{n} good things nearby' : '{n} places that need care', { n: total });
     if (!total) {
-      feed.appendChild(h(`<div class="empty"><b>Nothing here yet</b>Be the first to capture something on your block.</div>`));
+      feed.appendChild(h(`<div class="empty"><b>${esc(t('Nothing here yet'))}</b>${esc(t('Be the first to capture something on your block.'))}</div>`));
       return;
     }
     posts.forEach((p) => feed.appendChild(postCard(p)));
     if (hasMore) {
-      const wrap = h(`<div class="load-more-wrap" style="grid-column:1/-1;text-align:center;margin-top:6px"><button class="pill">Load more</button></div>`);
+      const wrap = h(`<div class="load-more-wrap" style="grid-column:1/-1;text-align:center;margin-top:6px"><button class="pill">${esc(t('Load more'))}</button></div>`);
       wrap.querySelector('button').onclick = () => loadFeed(feed, countEl, offset + posts.length);
       feed.appendChild(wrap);
     }
   } catch (err) {
     if (offset === 0) feed.innerHTML = '';
-    feed.appendChild(h(`<div class="empty"><b>Couldn't load the feed</b>${esc(err.message)}</div>`));
+    feed.appendChild(h(`<div class="empty"><b>${esc(t("Couldn't load the feed"))}</b>${esc(err.message)}</div>`));
   }
 }
 
@@ -908,8 +908,8 @@ function postCard(p) {
   title.onclick = () => openPostModal(p);
   body.appendChild(title);
   body.appendChild(h(`<div class="pmeta">
-      <span>📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
-      <span>· by ${esc(p.author?.name || 'Neighbour')}</span>
+      <span>📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
+      <span>· ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })}</span>
       <span>· ${timeAgo(p.createdAt)}</span>
     </div>`));
 
@@ -917,7 +917,7 @@ function postCard(p) {
   const tags = h(`<div class="ptags"></div>`);
   if (p.ai?.tag) tags.appendChild(h(`<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>`));
   if (p.stream === 'care' && p.status !== 'open')
-    tags.appendChild(h(`<span class="status-tag ${p.status}">${esc(STATUS_LABEL[p.status])}</span>`));
+    tags.appendChild(h(`<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status]))}</span>`));
   if (tags.children.length) body.appendChild(tags);
 
   // Message: a small thumbnail beside the description. The photo/video is no longer shown
@@ -925,7 +925,7 @@ function postCard(p) {
   // is too far from where it was posted, the thumbnail is blurred and the text is withheld.
   const msg = h(`<div class="pmsg${far ? ' locked' : ''}"></div>`);
   if (p.mediaUrl) {
-    const thumb = h(`<button class="pthumb ${g ? 'g' : 'c'}${far ? ' locked' : ''}" type="button" aria-label="View full message">
+    const thumb = h(`<button class="pthumb ${g ? 'g' : 'c'}${far ? ' locked' : ''}" type="button" aria-label="${esc(t('View full message'))}">
       ${p.mediaType === 'video'
         ? `<video src="${esc(p.mediaUrl)}#t=0.1" muted playsinline preload="metadata"></video><span class="thumb-play">▶</span>`
         : `<img src="${esc(p.mediaUrl)}" alt="" loading="lazy">`}
@@ -935,10 +935,10 @@ function postCard(p) {
     msg.appendChild(thumb);
   }
   const desc = far
-    ? h(`<p class="pdesc locked-note">🔒 ${p.distanceM != null ? dist(p.distanceM) + ' away' : 'Nearby'} — come within ${REVEAL_LABEL} of where it was posted to read it.</p>`)
+    ? h(`<p class="pdesc locked-note">🔒 ${tf('{dist} — come within {radius} of where it was posted to read it.', { dist: p.distanceM != null ? tf('{d} away', { d: dist(p.distanceM) }) : t('Nearby'), radius: REVEAL_LABEL })}</p>`)
     : p.body
       ? h(`<p class="pdesc">${esc(p.body)}</p>`)
-      : h(`<p class="pdesc muted">${p.mediaUrl ? 'Tap to read the full message.' : ''}</p>`);
+      : h(`<p class="pdesc muted">${p.mediaUrl ? esc(t('Tap to read the full message.')) : ''}</p>`);
   desc.onclick = () => openPostModal(p);
   msg.appendChild(desc);
   body.appendChild(msg);
@@ -946,7 +946,7 @@ function postCard(p) {
   // AI action suggestion for care items routed to the city
   if (p.stream === 'care' && p.ai?.action === 'city' && p.status === 'open') {
     body.appendChild(h(`<div class="suggest">${ICONS.spark}
-      <div><b>AI suggests: this needs the city</b><p>${esc(p.ai.summary || '')}</p></div></div>`));
+      <div><b>${esc(t('AI suggests: this needs the city'))}</b><p>${esc(p.ai.summary || '')}</p></div></div>`));
   }
 
   body.appendChild(reactionRow(p, card));
@@ -973,26 +973,26 @@ function openPostModal(p) {
   }
   cardEl.appendChild(h(`<div class="modal-text">
       <div class="ptags">
-        <span class="badge-stream ${g ? 'g' : 'c'}">${g ? '✦ The Good' : '△ Needs Care'}</span>
+        <span class="badge-stream ${g ? 'g' : 'c'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>
         ${p.ai?.tag ? `<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>` : ''}
-        ${p.stream === 'care' && p.status !== 'open' ? `<span class="status-tag ${p.status}">${esc(STATUS_LABEL[p.status])}</span>` : ''}
+        ${p.stream === 'care' && p.status !== 'open' ? `<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
       </div>
       <h2>${esc(p.title)}</h2>
       <div class="pmeta">
-        <span>📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
-        <span>· by ${esc(p.author?.name || 'Neighbour')}</span>
+        <span>📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
+        <span>· ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })}</span>
         <span>· ${timeAgo(p.createdAt)}</span>
       </div>
       ${far
-        ? `<div class="modal-locked">🔒<div><b>${p.distanceM != null ? dist(p.distanceM) + ' away' : 'You’re not nearby'}</b>
-             <p>This message and its photo unlock when you’re within ${REVEAL_LABEL} of where it was posted.</p></div></div>`
+        ? `<div class="modal-locked">🔒<div><b>${p.distanceM != null ? esc(tf('{d} away', { d: dist(p.distanceM) })) : esc(t('You’re not nearby'))}</b>
+             <p>${tf('This message and its photo unlock when you’re within {radius} of where it was posted.', { radius: REVEAL_LABEL })}</p></div></div>`
         : (p.body ? `<p class="pdesc">${esc(p.body)}</p>` : '')}
       <div class="modal-actions">
-        ${far ? '' : `<a class="modal-open-full" href="#/post/${p.id}">Open full post &amp; replies ›</a>`}
+        ${far ? '' : `<a class="modal-open-full" href="#/post/${p.id}">${esc(t('Open full post & replies ›'))}</a>`}
       </div>
     </div>`));
 
-  const close = h(`<button class="modal-close" type="button" aria-label="Close">×</button>`);
+  const close = h(`<button class="modal-close" type="button" aria-label="${esc(t('Close'))}">×</button>`);
   cardEl.appendChild(close);
   overlay.appendChild(cardEl);
 
@@ -1004,12 +1004,12 @@ function openPostModal(p) {
   // Owner or admin (TEACHER_EMAILS) can delete; admin can remove any post.
   const isOwner = state.user && p.author?.id === state.user.id;
   if (state.user && (isOwner || state.user.isAdmin)) {
-    const del = h(`<button class="modal-del" type="button">🗑 ${isOwner ? 'Remove' : 'Delete (admin)'}</button>`);
+    const del = h(`<button class="modal-del" type="button">🗑 ${isOwner ? esc(t('Remove')) : esc(t('Delete (admin)'))}</button>`);
     del.onclick = async () => {
-      if (!confirm(isOwner ? 'Remove this post? This cannot be undone.' : 'Delete this neighbour’s post as admin? This cannot be undone.')) return;
+      if (!confirm(isOwner ? t('Remove this post? This cannot be undone.') : t('Delete this neighbour’s post as admin? This cannot be undone.'))) return;
       try {
         await api.del(`/api/posts/${p.id}`);
-        toast('Post removed', 'ok');
+        toast(t('Post removed'), 'ok');
         dismiss();
         render(); // refresh the feed so the deleted card disappears
       } catch (e) { toast(e.message, 'err'); }
@@ -1018,7 +1018,7 @@ function openPostModal(p) {
   }
   close.onclick = dismiss;
   overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
-  cardEl.querySelector('.modal-open-full').onclick = dismiss; // the hash change routes to detail
+  cardEl.querySelector('.modal-open-full')?.addEventListener('click', dismiss); // null when far; hash routes to detail
   _modalEsc = (e) => { if (e.key === 'Escape') dismiss(); };
   document.addEventListener('keydown', _modalEsc);
 
@@ -1045,17 +1045,17 @@ function reactionRow(p, cardEl) {
   };
 
   if (g) {
-    row.append(mk('cheer', '👏 Cheer', 'cheer'), mk('help', "🙌 I'll help tend it"));
+    row.append(mk('cheer', `👏 ${esc(t('Cheer'))}`, 'cheer'), mk('help', `🙌 ${esc(t("I'll help tend it"))}`));
   } else {
     if (p.ai?.action === 'city' && (p.status === 'open' || p.status === 'rallying') && p.author?.id === state.user.id) {
-      const send = h(`<button class="rbtn act">${ICONS.send} Send report</button>`);
+      const send = h(`<button class="rbtn act">${ICONS.send} ${esc(t('Send report'))}</button>`);
       send.onclick = () => advance(p.id, 'send_report');
       row.appendChild(send);
     }
-    row.append(mk('metoo', '🙋 Me too here'), mk('help', "🙌 I'll help"));
+    row.append(mk('metoo', `🙋 ${esc(t('Me too here'))}`), mk('help', `🙌 ${esc(t("I'll help"))}`));
   }
-  const share = h(`<button class="rbtn">⤷ Share</button>`);
-  share.onclick = () => { navigator.clipboard?.writeText(location.origin + '/#/post/' + p.id); toast('Link copied', 'ok'); };
+  const share = h(`<button class="rbtn">⤷ ${esc(t('Share'))}</button>`);
+  share.onclick = () => { navigator.clipboard?.writeText(location.origin + '/#/post/' + p.id); toast(t('Link copied'), 'ok'); };
   row.appendChild(share);
   return row;
 }
@@ -1063,7 +1063,7 @@ function reactionRow(p, cardEl) {
 async function advance(id, action) {
   try {
     await api.post(`/api/posts/${id}/advance`, { action });
-    toast(action === 'send_report' ? 'Report sent to District Works' : 'Loop updated', 'ok');
+    toast(action === 'send_report' ? t('Report sent to District Works') : t('Loop updated'), 'ok');
     render();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -1286,7 +1286,7 @@ const mapFallback = (el) => {
 function mapCard(streamFilter) {
   const card = h(`
     <div class="map-card">
-      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || 'Locating…')}</span></div>
+      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || t('Locating…'))}</span></div>
       <div class="gmap"></div>
     </div>`);
   const el = card.querySelector('.gmap');
@@ -1340,12 +1340,12 @@ function sidePanel() {
 
   const cta = h(`
     <div class="capture-cta">
-      <b>Notice something?</b>
-      <p>Capture the good or the needs-care. Location is attached automatically on mobile.</p>
+      <b>${esc(t('Notice something?'))}</b>
+      <p>${esc(t('Capture the good or the needs-care. Location is attached automatically on mobile.'))}</p>
       <div class="cap-row">
-        <button class="cap-btn" data-mode="photo">${ICONS.camera}Photo</button>
-        <button class="cap-btn" data-mode="video">${ICONS.video}Video</button>
-        <button class="cap-btn solid" data-mode="pin">${ICONS.pin}Pin</button>
+        <button class="cap-btn" data-mode="photo">${ICONS.camera}${esc(t('Photo'))}</button>
+        <button class="cap-btn" data-mode="video">${ICONS.video}${esc(t('Video'))}</button>
+        <button class="cap-btn solid" data-mode="pin">${ICONS.pin}${esc(t('Pin'))}</button>
       </div>
     </div>`);
   cta.querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => go('capture')));
@@ -1353,36 +1353,36 @@ function sidePanel() {
 
   side.appendChild(h(`
     <div class="panel">
-      <h4>👏 Capitalization in action <span class="tagpin">Active-constructive</span></h4>
-      <p>Reactions aren't passive "likes." Neighbours reply with <strong>Cheer</strong>, <strong>I'll join</strong>, or <strong>Me too here</strong> — the enthusiastic responses that amplify a sharer's wellbeing.</p>
+      <h4>👏 ${esc(t('Capitalization in action'))} <span class="tagpin">${esc(t('Active-constructive'))}</span></h4>
+      <p>${tf('Reactions aren\'t passive "likes." Neighbours reply with {a}, {b}, or {c} — the enthusiastic responses that amplify a sharer\'s wellbeing.', { a: `<strong>${esc(t('Cheer'))}</strong>`, b: `<strong>${esc(t("I'll join"))}</strong>`, c: `<strong>${esc(t('Me too here'))}</strong>` })}</p>
     </div>`));
 
-  const impact = h(`<div class="panel"><h4>My impact <span class="tagpin">Intrapersonal</span></h4><div class="impact-slot">…</div></div>`);
+  const impact = h(`<div class="panel"><h4>${esc(t('My impact'))} <span class="tagpin">${esc(t('Intrapersonal'))}</span></h4><div class="impact-slot">…</div></div>`);
   side.appendChild(impact);
-  const community = h(`<div class="panel"><h4>Our block this month <span class="tagpin">Collective efficacy</span></h4><div class="comm-slot">…</div></div>`);
+  const community = h(`<div class="panel"><h4>${esc(t('Our block this month'))} <span class="tagpin">${esc(t('Collective efficacy'))}</span></h4><div class="comm-slot">…</div></div>`);
   side.appendChild(community);
 
-  const loop = h(`<div class="panel"><h4>Loop status · recent care</h4><div class="loop-slot">…</div></div>`);
+  const loop = h(`<div class="panel"><h4>${esc(t('Loop status · recent care'))}</h4><div class="loop-slot">…</div></div>`);
   side.appendChild(loop);
 
   // hydrate
   api.get('/api/stats/me').then((s) => {
     impact.querySelector('.impact-slot').innerHTML = `
-      <div class="stat"><span class="n">${s.acts}</span><span class="l">acts of care this season</span></div>
+      <div class="stat"><span class="n">${s.acts}</span><span class="l">${esc(t('acts of care this season'))}</span></div>
       <div class="bar"><i style="width:${Math.round(s.progress * 100)}%"></i></div>
-      <div class="stat" style="margin-top:12px"><span class="n">${s.resolved}</span><span class="l">items you helped get <strong>resolved</strong></span></div>`;
+      <div class="stat" style="margin-top:12px"><span class="n">${s.resolved}</span><span class="l">${tf('items you helped get {resolved}', { resolved: `<strong>${esc(t('resolved'))}</strong>` })}</span></div>`;
   }).catch(() => {});
   api.get('/api/stats/community').then((c) => {
     community.querySelector('.comm-slot').innerHTML = `
-      <div class="stat"><span class="n">${c.acts}</span><span class="l">acts across ${c.neighbours} neighbours</span></div>
-      <p style="margin-top:4px">↑ ${c.changePct}% vs last month · ${c.resolved} issues closed together</p>`;
+      <div class="stat"><span class="n">${c.acts}</span><span class="l">${tf('acts across {n} neighbours', { n: c.neighbours })}</span></div>
+      <p style="margin-top:4px">${tf('↑ {pct}% vs last month · {n} issues closed together', { pct: c.changePct, n: c.resolved })}</p>`;
   }).catch(() => {});
   api.get('/api/posts?stream=care&sort=new').then(({ posts }) => {
     const withLoop = posts.find((p) => p.loop.length) || posts[0];
     const slot = loop.querySelector('.loop-slot');
-    if (!withLoop) { slot.innerHTML = '<p>No care items being tracked yet.</p>'; return; }
+    if (!withLoop) { slot.innerHTML = `<p>${esc(t('No care items being tracked yet.'))}</p>`; return; }
     slot.innerHTML = `<p style="font-weight:700;color:var(--ink);margin-bottom:9px">${esc(withLoop.title)}</p>` +
-      (withLoop.loop.length ? renderLoopSteps(withLoop.loop) : '<p>Not yet routed.</p>');
+      (withLoop.loop.length ? renderLoopSteps(withLoop.loop) : `<p>${esc(t('Not yet routed.'))}</p>`);
   }).catch(() => {});
 
   return side;
@@ -1400,20 +1400,20 @@ function captureView() {
   const draft = { stream: 'care', mode: 'photo', file: null, mediaUrl: null, mediaType: 'photo', coords: null, place: '', neighborhood: null };
   const wrap = h(`<div class="capture-view"></div>`);
 
-  wrap.appendChild(h(`<div class="back-link">‹ Back to feed</div>`)).onclick = () => history.back();
-  wrap.appendChild(h(`<div class="toprow"><h2>New capture<small>Photo &amp; short video · location attached automatically</small></h2></div>`));
+  wrap.appendChild(h(`<div class="back-link">‹ ${esc(t('Back to feed'))}</div>`)).onclick = () => history.back();
+  wrap.appendChild(h(`<div class="toprow"><h2>${esc(t('New capture'))}<small>${esc(t('Photo & short video · location attached automatically'))}</small></h2></div>`));
 
   const vf = h(`
     <div class="viewfinder">
       <div class="grid3"></div>
-      <div class="placeholder">Upload a photo or a short clip (≤ 15s).<br>Your location is auto-tagged.</div>
-      <div class="vf-loc">${ICONS.pin.replace('currentColor', '#fff')}<span class="loc-text">Locating…</span></div>
+      <div class="placeholder">${esc(t('Upload a photo or a short clip (≤ 15s).'))}<br>${esc(t('Your location is auto-tagged.'))}</div>
+      <div class="vf-loc">${ICONS.pin.replace('currentColor', '#fff')}<span class="loc-text">${esc(t('Locating…'))}</span></div>
     </div>`);
   wrap.appendChild(vf);
 
   const modes = h(`<div class="modes">
-      <span class="mode on" data-m="photo">Photo</span>
-      <span class="mode" data-m="video">Video ≤ 15s</span></div>`);
+      <span class="mode on" data-m="photo">${esc(t('Photo'))}</span>
+      <span class="mode" data-m="video">${esc(t('Video ≤ 15s'))}</span></div>`);
   modes.querySelectorAll('.mode').forEach((m) => m.onclick = () => {
     modes.querySelectorAll('.mode').forEach((x) => x.classList.remove('on'));
     m.classList.add('on'); draft.mode = m.dataset.m;
@@ -1421,8 +1421,8 @@ function captureView() {
   wrap.appendChild(modes);
 
   const up = h(`<div class="upbtns">
-      <label class="upbtn">${ICONS.camera}Take a photo<input type="file" accept="image/*" capture="environment" hidden></label>
-      <label class="upbtn">${ICONS.video}Take a video<input type="file" accept="video/*" capture="environment" hidden></label>
+      <label class="upbtn">${ICONS.camera}${esc(t('Take a photo'))}<input type="file" accept="image/*" capture="environment" hidden></label>
+      <label class="upbtn">${ICONS.video}${esc(t('Take a video'))}<input type="file" accept="video/*" capture="environment" hidden></label>
     </div>`);
   up.querySelectorAll('input').forEach((inp) => inp.onchange = (e) => onFile(e.target.files[0]));
   wrap.appendChild(up);
@@ -1431,8 +1431,8 @@ function captureView() {
 
   // stream picker
   const pick = h(`<div class="stream-pick">
-      <button class="care on" data-s="care"><b>△ Needs Care</b><span>Something to fix or flag</span></button>
-      <button class="good" data-s="good"><b>✦ The Good</b><span>Something worth savouring</span></button>
+      <button class="care on" data-s="care"><b>△ ${esc(t('Needs Care'))}</b><span>${esc(t('Something to fix or flag'))}</span></button>
+      <button class="good" data-s="good"><b>✦ ${esc(t('The Good'))}</b><span>${esc(t('Something worth savouring'))}</span></button>
     </div>`);
   pick.querySelectorAll('button').forEach((b) => b.onclick = () => {
     pick.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
@@ -1442,10 +1442,10 @@ function captureView() {
 
   const form = h(`
     <div class="card">
-      <div class="field"><label>Title</label><input name="title" placeholder="What did you notice?"></div>
-      <div class="field"><label>A little more (optional)</label><textarea name="body" rows="2" placeholder="Add context for your neighbours"></textarea></div>
+      <div class="field"><label>${esc(t('Title'))}</label><input name="title" placeholder="${esc(t('What did you notice?'))}"></div>
+      <div class="field"><label>${esc(t('A little more (optional)'))}</label><textarea name="body" rows="2" placeholder="${esc(t('Add context for your neighbours'))}"></textarea></div>
       <div class="ai-preview hidden">${ICONS.spark}<div class="ai-text"></div></div>
-      <button class="btn primary" disabled>Post to the block</button>
+      <button class="btn primary" disabled>${esc(t('Post to the block'))}</button>
     </div>`);
   const titleInput = form.querySelector('[name=title]');
   const bodyInput = form.querySelector('[name=body]');
@@ -1468,13 +1468,13 @@ function captureView() {
     busy: (on, label) => {
       if (!on) return;
       aiBox.classList.remove('hidden');
-      aiText.innerHTML = `<b>✍️ Writing as ${esc(label)}…</b>`;
+      aiText.innerHTML = `✍️ <b>${tf('Writing as {label}…', { label: esc(label) })}</b>`;
     },
     fill: ({ title, description, label }) => {
       if (title) titleInput.value = title;       // styled picks intentionally replace the fields
       if (description) bodyInput.value = description;
       aiBox.classList.remove('hidden');
-      aiText.innerHTML = `<b>✍️ ${esc(label)}</b><p>Edit anything before you post.</p>`;
+      aiText.innerHTML = `✍️ <b>${esc(label)}</b><p>${esc(t('Edit anything before you post.'))}</p>`;
       refreshSubmit();
     },
   });
@@ -1485,14 +1485,14 @@ function captureView() {
   async function autoDescribe(file) {
     const seq = ++describeSeq;
     aiBox.classList.remove('hidden');
-    aiText.innerHTML = '<b>Reading your photo…</b>';
+    aiText.innerHTML = `<b>${esc(t('Reading your photo…'))}</b>`;
     try {
       const { title, description } = await api.describeImage(file, draft.stream, currentLang());
       if (seq !== describeSeq) return; // a newer photo superseded this one
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !bodyInput.value.trim()) bodyInput.value = description;
       refreshSubmit();
-      aiText.innerHTML = '<b>Suggested from your photo</b><p>Edit anything before you post.</p>';
+      aiText.innerHTML = `<b>${esc(t('Suggested from your photo'))}</b><p>${esc(t('Edit anything before you post.'))}</p>`;
     } catch {
       if (seq === describeSeq) aiBox.classList.add('hidden'); // silent fall back to manual
     }
@@ -1525,7 +1525,7 @@ function captureView() {
   const onCoords = async (lat, lng) => {
     draft.coords = { lat, lng };
     verifyPhotoGeo(draft, geoEl, refreshSubmit); // recheck now that we know where we are
-    showLoc('Locating…');
+    showLoc(t('Locating…'));
     const geo = await reverseGeocode(lat, lng);
     draft.place = geo?.placeName || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     draft.neighborhood = geo?.neighborhood || null;
@@ -1535,11 +1535,11 @@ function captureView() {
       .then(({ user }) => { state.user = user; }).catch(() => {});
   };
   function requestLoc() {
-    if (!navigator.geolocation) { showLoc('Location unavailable on this device'); return; }
-    showLoc('Locating…');
+    if (!navigator.geolocation) { showLoc(t('Location unavailable on this device')); return; }
+    showLoc(t('Locating…'));
     navigator.geolocation.getCurrentPosition(
       (pos) => onCoords(pos.coords.latitude, pos.coords.longitude),
-      () => { draft.coords = null; refreshSubmit(); showLoc('Turn on location to post — tap to retry'); },
+      () => { draft.coords = null; refreshSubmit(); showLoc(t('Turn on location to post — tap to retry')); },
       { enableHighAccuracy: true, timeout: 6000 }
     );
   }
@@ -1547,7 +1547,7 @@ function captureView() {
   requestLoc();
 
   submit.onclick = async () => {
-    submit.disabled = true; submit.textContent = 'Posting…';
+    submit.disabled = true; submit.textContent = t('Posting…');
     try {
       let mediaUrl = null, mediaType = draft.mediaType;
       if (draft.file) {
@@ -1568,12 +1568,12 @@ function captureView() {
       const ai = form.querySelector('.ai-preview');
       ai.classList.remove('hidden');
       ai.querySelector('.ai-text').innerHTML =
-        `<b>AI routed this to: ${esc(ACTION_LABEL[post.ai.action] || post.ai.action)}</b><p>${esc(post.ai.summary || '')}</p>`;
-      toast('Posted to your block', 'ok');
+        `<b>${tf('AI routed this to: {action}', { action: esc(t(ACTION_LABEL[post.ai.action] || post.ai.action)) })}</b><p>${esc(post.ai.summary || '')}</p>`;
+      toast(t('Posted to your block'), 'ok');
       setTimeout(() => go(`post/${post.id}`), 700);
     } catch (e) {
       toast(e.message, 'err');
-      submit.disabled = false; submit.textContent = 'Post to the block';
+      submit.disabled = false; submit.textContent = t('Post to the block');
     }
   };
 
@@ -1610,7 +1610,7 @@ function postDetailView() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ The Good' : '△ Needs Care'}</span>
           ${p.ai?.tag ? `<span class="badge" style="background:var(--green-tint);color:var(--green)">${esc(p.ai.tag)}</span>` : ''}
-          ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(STATUS_LABEL[p.status])}</span>` : ''}
+          ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
         </div>
         <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${esc(p.title)}</h2>
         <div class="pmeta">📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · by ${esc(p.author?.name || 'Neighbour')} · ${timeAgo(p.createdAt)}</div>
@@ -1663,8 +1663,8 @@ function postDetailView() {
 function actionLadder(p) {
   const owner = p.author?.id === state.user.id;
   const box = h(`<div class="card">
-      <h4 style="font-family:var(--display);margin-bottom:4px">AI action ladder</h4>
-      <p style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Every issue stays coupled to a path to act. AI suggested: <strong>${esc(ACTION_LABEL[p.ai?.action] || '—')}</strong>.</p>
+      <h4 style="font-family:var(--display);margin-bottom:4px">${esc(t('AI action ladder'))}</h4>
+      <p style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">${tf('Every issue stays coupled to a path to act. AI suggested: {action}.', { action: `<strong>${esc(p.ai?.action ? t(ACTION_LABEL[p.ai.action] || p.ai.action) : '—')}</strong>` })}</p>
       <div class="ladder"></div>
     </div>`);
   const ladder = box.querySelector('.ladder');
