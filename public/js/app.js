@@ -55,7 +55,9 @@ function langSwitcher(cls = '') {
   const sel = h(`<select class="lang-switch ${cls}" aria-label="${esc(t('Language'))}"></select>`);
   UI_LANGS_META.forEach((l) => sel.appendChild(h(`<option value="${l.code}">${esc(l.label)}</option>`)));
   sel.value = currentUiLang();
-  sel.onchange = async () => { await setUiLang(sel.value); render(); };
+  // routeFromHash() re-renders the CURRENT view for both anonymous (landing/auth) and
+  // logged-in (shell) states; render() alone only rebuilds the logged-in shell.
+  sel.onchange = async () => { await setUiLang(sel.value); routeFromHash(); };
   return sel;
 }
 
@@ -274,13 +276,13 @@ async function renderLanding() {
 
   const hero = h(`
     <section class="hero">
-      <h1>Your block, in good hands — together.</h1>
-      <p>Notice the good on your street, and flag what needs care — then act. Here's what neighbours nearby are noticing right now.</p>
+      <h1>${esc(t('Your block, in good hands — together.'))}</h1>
+      <p>${esc(t("Notice the good on your street, and flag what needs care — then act. Here's what neighbours nearby are noticing right now."))}</p>
       <div class="hero-cta">
-        <button class="btn primary" data-share>✦ Share something good</button>
-        <button class="btn ghost" data-login>△ Log in to flag care</button>
+        <button class="btn primary" data-share>✦ ${esc(t('Share something good'))}</button>
+        <button class="btn ghost" data-login>△ ${esc(t('Log in to flag care'))}</button>
       </div>
-      <div class="hero-note">Sharing “the good” is open to everyone — just allow your location. Flagging “needs care” and replying to neighbours need a free account.</div>
+      <div class="hero-note">${esc(t('Sharing “the good” is open to everyone — just allow your location. Flagging “needs care” and replying to neighbours need a free account.'))}</div>
     </section>`);
   hero.querySelector('[data-share]').onclick = () => go('share');
   hero.querySelector('[data-login]').onclick = () => go('login');
@@ -297,14 +299,14 @@ async function renderLanding() {
   const care = samples.filter((s) => s.stream === 'care');
 
   const cols = h(`<div class="land-cols"></div>`);
-  const goodCol = h(`<div class="land-col"><h2>✦ The Good nearby</h2><div class="land-grid"></div></div>`);
-  const careCol = h(`<div class="land-col"><h2>△ Needs Care nearby</h2><div class="land-grid"></div></div>`);
+  const goodCol = h(`<div class="land-col"><h2>✦ ${esc(t('The Good nearby'))}</h2><div class="land-grid"></div></div>`);
+  const careCol = h(`<div class="land-col"><h2>△ ${esc(t('Needs Care nearby'))}</h2><div class="land-grid"></div></div>`);
   goodAll.forEach((p) => goodCol.querySelector('.land-grid').appendChild(landingCard(p)));
   care.forEach((p) => careCol.querySelector('.land-grid').appendChild(landingCard(p)));
   cols.append(goodCol, careCol);
   wrap.appendChild(cols);
 
-  wrap.appendChild(h(`<footer class="land-foot">优城美市 · Our Block — a place-based civic wellbeing app.</footer>`));
+  wrap.appendChild(h(`<footer class="land-foot">优城美市 · ${esc(t('Our Block — a place-based civic wellbeing app.'))}</footer>`));
   app.appendChild(wrap);
 }
 
@@ -317,7 +319,7 @@ function landingCard(p) {
   card.appendChild(h(`<div class="lbody">
       <h3>${esc(p.title)}</h3>
       <p>${esc(p.body || '')}</p>
-      <div class="lmeta">📍 ${esc(p.placeName || 'Nearby')} · ${esc(p.author?.name || 'A neighbour')} · ${timeAgo(p.createdAt)}${p.sample ? ' · <span class="sample-tag">sample</span>' : ''}</div>
+      <div class="lmeta">📍 ${esc(p.placeName || t('Nearby'))} · ${esc(p.author?.name || t('A neighbour'))} · ${timeAgo(p.createdAt)}${p.sample ? ` · <span class="sample-tag">${esc(t('sample'))}</span>` : ''}</div>
     </div>`));
   card.onclick = () => go(`post/${p.id}`);
   return card;
@@ -326,7 +328,7 @@ function landingCard(p) {
 function landingMap(samples) {
   const card = h(`
     <div class="map-card land-map">
-      <div class="loc"><span class="live"></span>📍 <span class="loc-name">Exploring nearby</span></div>
+      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(t('Exploring nearby'))}</span></div>
       <div class="gmap"></div>
     </div>`);
   const el = card.querySelector('.gmap');
