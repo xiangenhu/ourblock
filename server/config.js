@@ -85,15 +85,16 @@ const llm = {
   vendors: VENDORS,
 };
 
-// ── Maps (hybrid: Google where reachable, self-hosted Leaflet where blocked) ──
-// provider 'auto' (default): the browser uses Google Maps when it loads (and the region
-// isn't known to block it) and otherwise falls back to Leaflet with tiles proxied through
-// OUR server (routes/maps.js) — so the map works in mainland China. Force one with
-// MAP_PROVIDER=google|leaflet. Tiles + reverse geocoding always go through the server, so
-// the browser never needs to reach OSM/Nominatim directly either.
+// ── Maps (hybrid: Google globally, 高德/Amap in China, Leaflet as fallback) ────
+// provider 'auto' (default): the browser picks based on its own location — Amap when it's
+// in mainland China (where Google Maps JS is unreachable), Google elsewhere, and self-hosted
+// Leaflet (tiles proxied through routes/maps.js) if neither loads. Force one with
+// MAP_PROVIDER=google|amap|leaflet. Reverse geocoding always goes through the server, so the
+// browser never needs to reach OSM/Nominatim directly either.
 const maps = {
-  provider: (env.MAP_PROVIDER || 'auto').toLowerCase(), // auto | google | leaflet
+  provider: (env.MAP_PROVIDER || 'auto').toLowerCase(), // auto | google | amap | leaflet
   apiKey: env.MAPS_API_KEY || '',                       // Google JS key (used when reachable)
+  amapKey: env.AMAP_KEY || '',                          // 高德 web JS key (domain-restricted in the Amap console)
   tileUrl: env.MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   geocodeUrl: env.MAP_GEOCODE_URL || 'https://nominatim.openstreetmap.org/reverse',
   userAgent: env.MAP_USER_AGENT || 'OurBlock/1.0 (civic wellbeing app)',

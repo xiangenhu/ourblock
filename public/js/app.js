@@ -834,13 +834,54 @@ async function advance(id, action) {
 }
 
 /* ----------------------------------------------------------------- the map */
-// Hybrid maps. The app picks a provider once per session: Google Maps when it loads
-// (and the region isn't known to block it), otherwise self-hosted Leaflet with tiles
-// proxied through OUR server (/api/maps/tiles/...). Both expose the same tiny engine
-// interface so the three map views below are provider-agnostic. Reverse geocoding always
-// goes through our server, so it works regardless of provider.
+// Hybrid maps. The app picks a provider once per session based on the browser's own
+// location: 高德/Amap in mainland China (where Google Maps JS is unreachable), Google
+// elsewhere, and self-hosted Leaflet (tiles proxied through /api/maps/tiles/...) if neither
+// loads. All three expose the same tiny engine interface so the three map views below are
+// provider-agnostic. Reverse geocoding always goes through our server, so it works
+// regardless of provider.
 
 const GOOGLE_BLOCKED = new Set(['CN']); // mainland China — Google Maps JS is unreachable
+
+// China lat/lng bounding box. Drives both provider auto-detection and the GCJ-02 datum
+// shift below (Amap, like all China map providers, uses GCJ-02 rather than raw WGS-84 GPS).
+const inChinaBounds = (lat, lng) =>
+  lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271;
+
+// WGS-84 (GPS) → GCJ-02 (the datum Amap renders in). Without this, China pins land
+// ~300–500m off. Outside China the two datums coincide, so coords pass through unchanged.
+function wgs84ToGcj02(lat, lng) {
+  if (!inChinaBounds(lat, lng)) return [lat, lng];
+  const a = 6378245.0, ee = 0.00669342162296594323;
+  const x = lng - 105.0, y = lat - 35.0;
+  const trig = (v) => 2 / 3 * (20 * Math.sin(6 * v * Math.PI) + 20 * Math.sin(2 * v * Math.PI));
+  let dLat = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x))
+    + trig(x) + 2 / 3 * (20 * Math.sin(y * Math.PI) + 40 * Math.sin(y / 3 * Math.PI))
+    + 2 / 3 * (160 * Math.sin(y / 12 * Math.PI) + 320 * Math.sin(y * Math.PI / 30));
+  let dLng = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x))
+    + trig(x) + 2 / 3 * (20 * Math.sin(x * Math.PI) + 40 * Math.sin(x / 3 * Math.PI))
+    + 2 / 3 * (150 * Math.sin(x / 12 * Math.PI) + 300 * Math.sin(x / 30 * Math.PI));
+  const radLat = lat / 180 * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180) / (a * (1 - ee) / (magic * sqrtMagic) * Math.PI);
+  dLng = (dLng * 180) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+  return [lat + dLat, lng + dLng];
+}
+
+// Is the browser in China? Prefer its real location, then the edge geo-IP hint, then
+// locale/timezone (the only signal available in local dev, where the geo header is empty).
+function browserInChina() {
+  const u = state.user || {};
+  if (u.lat != null && u.lng != null) return inChinaBounds(u.lat, u.lng);
+  const cc = (state.config && state.config.country || '').toUpperCase();
+  if (cc) return cc === 'CN';
+  try {
+    if (/Shanghai|Chongqing|Harbin|Urumqi|Kashgar/.test(Intl.DateTimeFormat().resolvedOptions().timeZone || '')) return true;
+  } catch { /* Intl unavailable */ }
+  return /^zh[-_]?CN/i.test(navigator.language || navigator.userLanguage || '');
+}
 
 let _googlePromise;
 function loadGoogle(key, timeoutMs = 4000) {
@@ -855,6 +896,21 @@ function loadGoogle(key, timeoutMs = 4000) {
     document.head.appendChild(s);
   });
   return _googlePromise;
+}
+
+let _amapPromise;
+function loadAmap(key, timeoutMs = 6000) {
+  if (_amapPromise) return _amapPromise;
+  _amapPromise = new Promise((resolve, reject) => {
+    const to = setTimeout(() => reject(new Error('amap timeout')), timeoutMs);
+    const s = document.createElement('script');
+    s.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}`;
+    s.async = true;
+    s.onload = () => { clearTimeout(to); window.AMap ? resolve(window.AMap) : reject(new Error('amap failed')); };
+    s.onerror = () => { clearTimeout(to); reject(new Error('amap failed')); };
+    document.head.appendChild(s);
+  });
+  return _amapPromise;
 }
 function leafletReady() {
   if (window.L) return Promise.resolve(window.L);
@@ -905,17 +961,74 @@ const leafletEngine = (L) => (el, center, zoom) => {
   };
 };
 
-// Choose a provider once per session: Google when reachable + allowed, else Leaflet.
+// 高德/Amap adapter. Amap takes [lng, lat] (note the order) in the GCJ-02 datum, so every
+// WGS-84 lat/lng coming from the app is converted on the way in — keeping the rest of the
+// app provider-agnostic and our stored coordinates pure WGS-84.
+const amapEngine = (AMap) => (el, center, zoom) => {
+  const toPos = (lat, lng) => { const g = wgs84ToGcj02(lat, lng); return [g[1], g[0]]; }; // → [lng, lat]
+  const map = new AMap.Map(el, { center: toPos(center[0], center[1]), zoom, zooms: [2, 19] });
+  setTimeout(() => map.resize && map.resize(), 60); // container may have sized after init
+  const youStyle = { radius: 7, strokeColor: '#fff', strokeWeight: 3, fillColor: '#234E3F', fillOpacity: 1 };
+  const pinStyle = (good) => ({ radius: 8, strokeColor: '#fff', strokeWeight: 2, fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1 });
+  const mk = (lat, lng, style, onClick, z) => {
+    const m = new AMap.CircleMarker({ center: toPos(lat, lng), bubble: true, cursor: onClick ? 'pointer' : 'default', zIndex: z, ...style });
+    map.add(m);
+    if (onClick) m.on('click', onClick);
+    return m;
+  };
+  return {
+    addPin: (lat, lng, good, onClick) => mk(lat, lng, pinStyle(good), onClick, 10),
+    addYou: (lat, lng) => mk(lat, lng, youStyle, null, 999),
+    move: (m, lat, lng) => m.setCenter(toPos(lat, lng)),
+    remove: (m) => map.remove(m),
+    fit: (pts, maxZoom) => {
+      if (!pts.length) return;
+      const ps = pts.map((p) => toPos(p[0], p[1]));
+      if (ps.length === 1) { map.setZoomAndCenter(maxZoom, ps[0]); return; }
+      const lngs = ps.map((p) => p[0]), lats = ps.map((p) => p[1]);
+      map.setBounds(new AMap.Bounds([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]));
+      map.on('zoomend', function clamp() { map.off('zoomend', clamp); if (map.getZoom() > maxZoom) map.setZoom(maxZoom); });
+    },
+    view: (c, z) => map.setZoomAndCenter(z, toPos(c[0], c[1])),
+    zoom: () => map.getZoom(),
+  };
+};
+
+// Remember which provider actually loaded, so we don't re-pay a blocked provider's timeout
+// (e.g. Google behind the GFW) on every page load. Only real maps are cached, never Leaflet.
+const MAP_CACHE_KEY = 'ob.mapProvider';
+const cachedProvider = () => { try { return localStorage.getItem(MAP_CACHE_KEY) || ''; } catch { return ''; } };
+const rememberProvider = (k) => { try { localStorage.setItem(MAP_CACHE_KEY, k); } catch { /* private mode */ } };
+
+// Choose a provider once per session, then cache it. Order in `auto`: Amap first when the
+// browser looks like it's in China, otherwise Google — but if Google can't load (a timeout
+// is the GFW's signature, i.e. China after all), fall back to Amap before Leaflet. So a
+// blocked Google always lands on Amap, even when location detection missed China.
+// MAP_PROVIDER forces a specific provider. Each loader can fail → we try the next.
 let _enginePromise;
 function getEngine() {
   if (_enginePromise) return _enginePromise;
   _enginePromise = (async () => {
-    const { mapsApiKey: key, country = '', mapProvider = 'auto' } = state.config || {};
-    const allowGoogle = key && mapProvider !== 'leaflet' &&
-      (mapProvider === 'google' || !GOOGLE_BLOCKED.has(country.toUpperCase()));
-    if (allowGoogle) {
-      try { return { create: googleEngine(await loadGoogle(key)), kind: 'google' }; }
-      catch { /* blocked or slow (e.g. China) → fall back to self-hosted Leaflet */ }
+    const { mapsApiKey: gkey, amapKey = '', country = '', mapProvider = 'auto' } = state.config || {};
+    const cn = browserInChina();
+    const tryAmap = async () => amapKey && { create: amapEngine(await loadAmap(amapKey)), kind: 'amap' };
+    const allowGoogle = gkey && (mapProvider === 'google' ||
+      (mapProvider === 'auto' && !GOOGLE_BLOCKED.has(country.toUpperCase())));
+    const tryGoogle = async () => allowGoogle && { create: googleEngine(await loadGoogle(gkey)), kind: 'google' };
+
+    // Forced providers: honour exactly, fall through to Leaflet only if they can't load.
+    if (mapProvider === 'amap') { try { const e = await tryAmap(); if (e) return e; } catch { /* → leaflet */ } }
+    else if (mapProvider === 'google') { try { const e = await tryGoogle(); if (e) return e; } catch { /* → leaflet */ } }
+    else {
+      // auto: lead with the likely-reachable provider, then try the other before Leaflet.
+      // A previously-successful provider jumps the queue so blocked ones aren't retried.
+      const byKind = { amap: tryAmap, google: tryGoogle };
+      const base = cn ? [tryAmap, tryGoogle] : [tryGoogle, tryAmap];
+      const lead = byKind[cachedProvider()];
+      const order = lead ? [lead, ...base.filter((f) => f !== lead)] : base;
+      for (const attempt of order) {
+        try { const e = await attempt(); if (e) { rememberProvider(e.kind); return e; } } catch { /* try next */ }
+      }
     }
     return { create: leafletEngine(await leafletReady()), kind: 'leaflet' };
   })();

@@ -105,10 +105,11 @@ router.get('/config', (req, res) => {
     googleEnabled: oauthGateway.enabled,
     gatewayEnabled: oauthGateway.enabled,
     gatewayUrl: oauthGateway.url,
-    // Maps: provider selection happens client-side (probe + this hint).
-    mapProvider: config.maps.provider,   // auto | google | leaflet
+    // Maps: provider selection happens client-side (browser location + this hint).
+    mapProvider: config.maps.provider,   // auto | google | amap | leaflet
     mapsApiKey: config.maps.apiKey,       // Google JS key (referrer-restricted, public)
-    country,                              // e.g. "CN" → skip Google, use Leaflet
+    amapKey: config.maps.amapKey,         // 高德 JS key (domain-restricted, public)
+    country,                              // e.g. "CN" → prefer Amap; edge geo-IP hint
   });
 });
 
