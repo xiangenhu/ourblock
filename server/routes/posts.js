@@ -1,7 +1,7 @@
 import express from 'express';
-import { requireAuth } from '../auth.js';
+import { requireAuth, isAdminEmail } from '../auth.js';
 import { classify } from '../ai.js';
-import { posts, addComment, addLoopStep, toggleReaction } from '../store/repo.js';
+import { posts, users, addComment, addLoopStep, toggleReaction } from '../store/repo.js';
 import { shapePost, getViewer, distanceMeters, authorSnapshot } from '../helpers.js';
 import { sampleList } from '../samples.js';
 import events from '../xapi/events.js';
@@ -221,11 +221,15 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// The owner can remove their own post; an admin (TEACHER_EMAILS) can remove any post.
 router.delete('/:id', requireAuth, async (req, res) => {
   const post = await posts.getById(req.params.id);
   if (!post) return res.status(404).json({ error: 'Not found.' });
-  if (post.userId !== req.userId)
-    return res.status(403).json({ error: 'You can only remove your own posts.' });
+  if (post.userId !== req.userId) {
+    const me = await users.getById(req.userId);
+    if (!isAdminEmail(me?.email))
+      return res.status(403).json({ error: 'You can only remove your own posts.' });
+  }
   await posts.del(req.params.id);
   res.json({ ok: true });
 });

@@ -39,12 +39,15 @@ export const api = {
     return data;
   },
 
-  /** Ask the LLM for a {title, description} from a photo and/or a note (not stored). */
-  async compose({ file, note, stream } = {}) {
+  /** Ask the LLM for a {title, description} from a photo and/or a note (not stored).
+   *  Pass `style` (id from /api/ai/styles) to rewrite in a culturally-iconic voice. */
+  async compose({ file, note, stream, lang, style } = {}) {
     const fd = new FormData();
     if (file) fd.append('media', file);
     if (note) fd.append('note', note);
     if (stream) fd.append('stream', stream);
+    if (lang) fd.append('lang', lang);
+    if (style) fd.append('style', style);
     const res = await fetch('/api/ai/describe', {
       method: 'POST',
       credentials: 'same-origin',
@@ -57,8 +60,8 @@ export const api = {
   },
 
   /** Photo-only convenience wrapper used by the signed-in capture screen. */
-  describeImage(file, stream) {
-    return this.compose({ file, stream });
+  describeImage(file, stream, lang) {
+    return this.compose({ file, stream, lang });
   },
 
   saveToken: (t) => t && localStorage.setItem(TOKEN_KEY, t),

@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { h, esc, timeAgo, dist, toast, ICONS } from './ui.js';
 import { exifGps, haversine } from './exif.js';
+import { t, tf, initI18n, setUiLang, currentUiLang, UI_LANGS_META } from './i18n.js';
 
 const app = document.getElementById('app');
 
@@ -37,12 +38,25 @@ async function boot() {
   try {
     state.config = await api.get('/api/auth/config');
   } catch { /* gateway config unavailable — fall back to defaults */ }
+  // Preload the UI dictionary before the first render. The default language follows the
+  // viewer's LOCATION (defaultLang(): China detection → geo-IP → locale), overridable by
+  // ?lang=, a saved choice, or the in-app switcher.
+  try { await initI18n({ hint: defaultLang() }); } catch { /* fall back to English */ }
   try {
     const { user } = await api.get('/api/auth/me');
     state.user = user;
   } catch { /* offline / first run */ }
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
+}
+
+/** A compact UI-language <select>; switching re-renders the whole app in the new language. */
+function langSwitcher(cls = '') {
+  const sel = h(`<select class="lang-switch ${cls}" aria-label="${esc(t('Language'))}"></select>`);
+  UI_LANGS_META.forEach((l) => sel.appendChild(h(`<option value="${l.code}">${esc(l.label)}</option>`)));
+  sel.value = currentUiLang();
+  sel.onchange = async () => { await setUiLang(sel.value); render(); };
+  return sel;
 }
 
 function routeFromHash() {
@@ -105,63 +119,63 @@ function renderAuth() {
     const forms = {
       login: `
         <form class="auth-form" data-act="login">
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <div class="field"><label>Password</label><input name="password" type="password" placeholder="••••••" required></div>
-          <button class="btn primary" type="submit">Sign in</button>
+          <div class="field"><label>${esc(t('Email'))}</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <div class="field"><label>${esc(t('Password'))}</label><input name="password" type="password" placeholder="••••••" required></div>
+          <button class="btn primary" type="submit">${esc(t('Sign in'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="forgot">Forgot password?</a> · New here? <a data-sw="register">Create an account</a></div>`,
+        <div class="auth-switch"><a data-sw="forgot">${esc(t('Forgot password?'))}</a> · ${esc(t('New here?'))} <a data-sw="register">${esc(t('Create an account'))}</a></div>`,
       register: `
         <form class="auth-form" data-act="register">
-          <div class="field"><label>Name</label><input name="name" placeholder="e.g. Ling W." required></div>
-          <div class="field"><label>Name in 中文 (optional)</label><input name="nameCjk" placeholder="玲"></div>
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <div class="field"><label>Password</label><input name="password" type="password" placeholder="at least 6 characters" required></div>
-          <button class="btn primary" type="submit">Create account</button>
+          <div class="field"><label>${esc(t('Name'))}</label><input name="name" placeholder="${esc(t('e.g. Ling W.'))}" required></div>
+          <div class="field"><label>${esc(t('Name in 中文 (optional)'))}</label><input name="nameCjk" placeholder="玲"></div>
+          <div class="field"><label>${esc(t('Email'))}</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <div class="field"><label>${esc(t('Password'))}</label><input name="password" type="password" placeholder="${esc(t('at least 6 characters'))}" required></div>
+          <button class="btn primary" type="submit">${esc(t('Create account'))}</button>
         </form>
-        <div class="auth-switch">Have an account? <a data-sw="login">Sign in</a></div>`,
+        <div class="auth-switch">${esc(t('Have an account?'))} <a data-sw="login">${esc(t('Sign in'))}</a></div>`,
       verify: `
-        <p class="auth-note">We emailed a 6-digit code to <b>${esc(pendingEmail)}</b>. Enter it to finish.</p>
+        <p class="auth-note">${tf('We emailed a 6-digit code to {email}. Enter it to finish.', { email: `<b>${esc(pendingEmail)}</b>` })}</p>
         <form class="auth-form" data-act="verify">
-          <div class="field"><label>Verification code</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
-          <button class="btn primary" type="submit">Verify &amp; continue</button>
+          <div class="field"><label>${esc(t('Verification code'))}</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
+          <button class="btn primary" type="submit">${esc(t('Verify & continue'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="resend">Resend code</a> · <a data-sw="login">Back to sign in</a></div>`,
+        <div class="auth-switch"><a data-sw="resend">${esc(t('Resend code'))}</a> · <a data-sw="login">${esc(t('Back to sign in'))}</a></div>`,
       forgot: `
-        <p class="auth-note">Enter your email and we'll send a reset code.</p>
+        <p class="auth-note">${esc(t("Enter your email and we'll send a reset code."))}</p>
         <form class="auth-form" data-act="forgot">
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <button class="btn primary" type="submit">Send reset code</button>
+          <div class="field"><label>${esc(t('Email'))}</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <button class="btn primary" type="submit">${esc(t('Send reset code'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="login">Back to sign in</a></div>`,
+        <div class="auth-switch"><a data-sw="login">${esc(t('Back to sign in'))}</a></div>`,
       reset: `
-        <p class="auth-note">Enter the code sent to <b>${esc(pendingEmail)}</b> and your new password.</p>
+        <p class="auth-note">${tf('Enter the code sent to {email} and your new password.', { email: `<b>${esc(pendingEmail)}</b>` })}</p>
         <form class="auth-form" data-act="reset">
-          <div class="field"><label>Reset code</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
-          <div class="field"><label>New password</label><input name="newPassword" type="password" placeholder="at least 6 characters" required></div>
-          <button class="btn primary" type="submit">Update password</button>
+          <div class="field"><label>${esc(t('Reset code'))}</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
+          <div class="field"><label>${esc(t('New password'))}</label><input name="newPassword" type="password" placeholder="${esc(t('at least 6 characters'))}" required></div>
+          <button class="btn primary" type="submit">${esc(t('Update password'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="login">Back to sign in</a></div>`,
+        <div class="auth-switch"><a data-sw="login">${esc(t('Back to sign in'))}</a></div>`,
     };
 
     const titles = {
-      login: 'Your block, in good hands — together.',
-      register: 'Create your neighbour account.',
-      verify: 'Check your email.',
-      forgot: 'Reset your password.',
-      reset: 'Set a new password.',
+      login: t('Your block, in good hands — together.'),
+      register: t('Create your neighbour account.'),
+      verify: t('Check your email.'),
+      forgot: t('Reset your password.'),
+      reset: t('Set a new password.'),
     };
 
     const card = h(`
       <div class="auth-wrap"><div class="auth-card">
-        <a class="auth-back" data-back>‹ Back to explore</a>
+        <a class="auth-back" data-back>‹ ${esc(t('Back to explore'))}</a>
         <div class="brand cjk">优城美市<small>Our Block</small></div>
-        <div class="auth-tag">${titles[mode]}</div>
+        <div class="auth-tag">${esc(titles[mode])}</div>
         <div class="err-slot"></div>
-        ${showGoogle ? `<button class="btn google" data-google>${GOOGLE_G}<span>Continue with Google</span></button><div class="auth-divider"><span>or</span></div>` : ''}
+        ${showGoogle ? `<button class="btn google" data-google>${GOOGLE_G}<span>${esc(t('Continue with Google'))}</span></button><div class="auth-divider"><span>${esc(t('or'))}</span></div>` : ''}
         ${forms[mode]}
       </div></div>`);
 
-    if (oauthErr && mode === 'login') setErr(card, "Google sign-in didn't complete. Please try again.");
+    if (oauthErr && mode === 'login') setErr(card, t("Google sign-in didn't complete. Please try again."));
 
     card.querySelector('[data-back]')?.addEventListener('click', () => go(''));
 
@@ -196,24 +210,24 @@ function renderAuth() {
         if (act === 'login') {
           const data = await api.post('/api/auth/login', fd);
           api.saveToken(data.token); state.user = data.user;
-          toast(`Welcome, ${data.user.name.split(' ')[0]}`, 'ok'); go('near');
+          toast(tf('Welcome, {name}', { name: data.user.name.split(' ')[0] }), 'ok'); go('near');
         } else if (act === 'register') {
           const out = await api.post('/api/auth/register', fd);
           if (out.user) { api.saveToken(out.token); state.user = out.user; go('near'); return; } // local fallback
           pendingEmail = fd.email; mode = 'verify'; mount();
-          toast('Verification code sent', 'ok');
+          toast(t('Verification code sent'), 'ok');
         } else if (act === 'verify') {
           const data = await api.post('/api/auth/verify', { email: pendingEmail, code: fd.code });
           api.saveToken(data.token); state.user = data.user;
-          toast('Email verified — welcome!', 'ok'); go('near');
+          toast(t('Email verified — welcome!'), 'ok'); go('near');
         } else if (act === 'forgot') {
           await api.post('/api/auth/forgot-password', { email: fd.email });
           pendingEmail = fd.email; mode = 'reset'; mount();
-          toast('Reset code sent (if the email exists)', 'ok');
+          toast(t('Reset code sent (if the email exists)'), 'ok');
         } else if (act === 'reset') {
           await api.post('/api/auth/reset-password', { email: pendingEmail, code: fd.code, newPassword: fd.newPassword });
           mode = 'login'; mount();
-          toast('Password updated — sign in', 'ok');
+          toast(t('Password updated — sign in'), 'ok');
         }
       } catch (err) {
         setErr(card, err.message);
@@ -243,10 +257,13 @@ function anonTopBar() {
   const bar = h(`
     <header class="land-top">
       <div class="brand cjk" data-home>优城美市<small>Our Block</small></div>
-      <button class="btn primary land-login">Log in</button>
+      <div class="land-top-right">
+        <button class="btn primary land-login">${esc(t('Log in'))}</button>
+      </div>
     </header>`);
   bar.querySelector('[data-home]').onclick = () => go('');
   bar.querySelector('.land-login').onclick = () => go('login');
+  bar.querySelector('.land-top-right').prepend(langSwitcher('compact'));
   return bar;
 }
 
@@ -315,56 +332,136 @@ function landingMap(samples) {
   const el = card.querySelector('.gmap');
   const nameEl = card.querySelector('.loc-name');
 
-  loadMaps().then(async (maps) => {
+  getEngine().then(async ({ create }) => {
     const first = samples[0];
     let real = [];
     try { real = (await api.get('/api/posts/pins')).pins || []; } catch { /* offline */ }
 
-    const map = new maps.Map(el, {
-      center: first ? { lat: first.lat, lng: first.lng } : { lat: 20, lng: 0 },
-      zoom: first ? 14 : 2,
-      disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy', clickableIcons: false,
-    });
+    const M = create(el, first ? [first.lat, first.lng] : [20, 0], first ? 14 : 2);
 
-    const markers = [];
+    let pins = [];
+    let youM = null;
     const place = (origin) => {
-      markers.forEach((m) => m.setMap(null));
-      markers.length = 0;
-      const bounds = new maps.LatLngBounds();
-      const add = (lat, lng, good, id) => {
-        const m = new maps.Marker({ position: { lat, lng }, map, icon: pinIcon(maps, good) });
-        m.addListener('click', () => go(`post/${id}`));
-        markers.push(m); bounds.extend({ lat, lng });
-      };
+      pins.forEach((m) => M.remove(m)); pins = [];
+      const bounds = [];
+      const add = (lat, lng, good, id) => { pins.push(M.addPin(lat, lng, good, () => go(`post/${id}`))); bounds.push([lat, lng]); };
       // Place sample pins near the visitor when we know where they are.
       samples.forEach((s) => {
-        const lat = origin && s.offset ? origin.lat + s.offset.dLat : s.lat;
-        const lng = origin && s.offset ? origin.lng + s.offset.dLng : s.lng;
+        const lat = origin && s.offset ? origin[0] + s.offset.dLat : s.lat;
+        const lng = origin && s.offset ? origin[1] + s.offset.dLng : s.lng;
         add(lat, lng, s.stream === 'good', s.id);
       });
       real.filter((p) => p.lat != null).forEach((p) => add(p.lat, p.lng, p.stream === 'good', p.id));
-      if (origin) { new maps.Marker({ position: origin, map, icon: youIcon(maps), title: 'You', zIndex: 999 }); bounds.extend(origin); }
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, 48);
-        maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
-      }
+      if (origin) { if (youM) M.move(youM, origin[0], origin[1]); else youM = M.addYou(origin[0], origin[1]); bounds.push(origin); }
+      M.fit(bounds, 16);
     };
     place(null);
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const here = [pos.coords.latitude, pos.coords.longitude];
         place(here);
-        const geo = await reverseGeocode(here.lat, here.lng);
+        const geo = await reverseGeocode(here[0], here[1]);
         if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
       }, () => { /* keep sample view */ }, { enableHighAccuracy: true, timeout: 8000 });
     }
-  }).catch(() => {
-    el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
-      '<span>Set a Google Maps API key (MAPS_API_KEY) to enable the live map.</span></div>';
-  });
+  }).catch(() => mapFallback(el));
 
   return card;
+}
+
+/* ----------------------------------------------- AI writing-style composer */
+// Languages we have style catalogs + gateway support for, with native labels for the picker.
+const STYLE_LANGS = [
+  { code: 'zh', label: '中文' }, { code: 'en', label: 'English' }, { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' }, { code: 'de', label: 'Deutsch' }, { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' }, { code: 'ja', label: '日本語' }, { code: 'ko', label: '한국어' },
+  { code: 'ru', label: 'Русский' }, { code: 'ar', label: 'العربية' }, { code: 'hi', label: 'हिन्दी' },
+];
+// Rough country → language for a location-based default (the geo-IP hint from /api/auth/config).
+const COUNTRY_LANG = {
+  CN: 'zh', TW: 'zh', HK: 'zh', MO: 'zh', SG: 'zh', JP: 'ja', KR: 'ko',
+  FR: 'fr', DE: 'de', AT: 'de', CH: 'de', IT: 'it', RU: 'ru', IN: 'hi',
+  ES: 'es', MX: 'es', AR: 'es', CO: 'es', CL: 'es', PE: 'es',
+  BR: 'pt', PT: 'pt', SA: 'ar', AE: 'ar', EG: 'ar', QA: 'ar',
+};
+const LANG_KEY = 'ob.lang';
+const supportedLang = (c) => STYLE_LANGS.some((l) => l.code === c);
+
+// The default writing language, derived from LOCATION first: China detection (the same signal
+// the map uses) → zh, then the edge geo-IP country, then the browser locale, else English.
+function defaultLang() {
+  if (browserInChina()) return 'zh';
+  const cc = (state.config && state.config.country || '').toUpperCase();
+  if (COUNTRY_LANG[cc]) return COUNTRY_LANG[cc];
+  const loc = (navigator.language || 'en').toLowerCase().split(/[-_]/)[0];
+  return supportedLang(loc) ? loc : 'en';
+}
+
+// The active writing language: a saved user choice wins; otherwise the location default.
+function currentLang() {
+  try { const saved = localStorage.getItem(LANG_KEY); if (supportedLang(saved)) return saved; } catch { /* private mode */ }
+  const d = defaultLang();
+  return supportedLang(d) ? d : 'en';
+}
+function setLang(code) { try { localStorage.setItem(LANG_KEY, code); } catch { /* private mode */ } }
+
+// Renders a language picker + a row of culturally-iconic writing-style chips (鲁迅风格 / 古文 /
+// 李白 … in Chinese, Shakespeare / Hemingway … in English, etc.) and wires each to the LLM
+// composer. Tapping a chip rewrites the title + description from the photo and/or note in that
+// voice. The picker defaults to the location's language; changing it reloads the chips and is
+// remembered. `host` is where the row is appended.
+async function mountStyleComposer(host, { getFile, getNote, stream, fill, busy }) {
+  const row = h(`<div class="style-row">
+      <div class="style-head">
+        <span class="style-lead">${ICONS.spark}<b>Write it as…</b></span>
+        <select class="style-lang" aria-label="Writing language"></select>
+      </div>
+      <div class="style-chips"></div>
+    </div>`);
+  const sel = row.querySelector('.style-lang');
+  const chips = row.querySelector('.style-chips');
+  STYLE_LANGS.forEach((l) => sel.appendChild(h(`<option value="${l.code}">${esc(l.label)}</option>`)));
+
+  let lang = currentLang();
+  sel.value = lang;
+  let seq = 0;
+
+  async function loadChips(lng) {
+    chips.innerHTML = '<span class="style-loading">…</span>';
+    let styles = [];
+    try { ({ styles = [] } = await api.get(`/api/ai/styles?lang=${encodeURIComponent(lng)}`)); }
+    catch { chips.innerHTML = ''; return; }
+    chips.innerHTML = '';
+    styles.forEach((s) => {
+      const chip = h(`<button type="button" class="style-chip" data-id="${esc(s.id)}"${s.hint ? ` title="${esc(s.hint)}"` : ''}>${esc(s.label)}</button>`);
+      chip.onclick = async () => {
+        const file = getFile();
+        const note = (getNote() || '').trim();
+        if (!file && !note) { toast('Add a photo or a note first', ''); return; }
+        const my = ++seq;
+        chips.querySelectorAll('.style-chip').forEach((c) => c.classList.toggle('on', c === chip));
+        chip.classList.add('busy');
+        busy?.(true, s.label);
+        try {
+          const streamNow = typeof stream === 'function' ? stream() : stream;
+          const { title, description } = await api.compose({ file, note, stream: streamNow, lang: lng, style: s.id });
+          if (my !== seq) return; // a newer pick superseded this one
+          fill({ title, description, label: s.label });
+        } catch (e) {
+          toast(e.message || 'AI is unavailable right now', 'err');
+        } finally {
+          chip.classList.remove('busy');
+          busy?.(false);
+        }
+      };
+      chips.appendChild(chip);
+    });
+  }
+
+  sel.onchange = () => { lang = sel.value; setLang(lang); loadChips(lang); };
+  host.appendChild(row);
+  loadChips(lang);
 }
 
 /* --------------------------------------------------- anonymous "share the good" */
@@ -456,7 +553,7 @@ function renderAnonShare() {
     aiBox.classList.remove('hidden');
     aiText.innerHTML = '<b>Thinking…</b>';
     try {
-      const { title, description } = await api.compose({ file: draft.file, note: noteInput.value.trim(), stream: 'good' });
+      const { title, description } = await api.compose({ file: draft.file, note: noteInput.value.trim(), stream: 'good', lang: currentLang() });
       if (my !== seq) return;
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !descInput.value.trim()) descInput.value = description;
@@ -465,6 +562,27 @@ function renderAnonShare() {
     } catch (err) { aiBox.classList.add('hidden'); toast(err.message, 'err'); }
   }
   view.querySelector('[data-ai]').onclick = compose;
+
+  // Culturally-iconic style chips — tapping one rewrites the title + description in that voice.
+  const styleHost = h('<div class="style-host"></div>');
+  aiBox.after(styleHost);
+  mountStyleComposer(styleHost, {
+    getFile: () => draft.file,
+    getNote: () => noteInput.value,
+    stream: 'good',
+    busy: (on, label) => {
+      if (!on) return;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `<b>✍️ Writing as ${esc(label)}…</b>`;
+    },
+    fill: ({ title, description, label }) => {
+      if (title) titleInput.value = title;       // styled picks intentionally replace the fields
+      if (description) descInput.value = description;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `<b>✍️ ${esc(label)} — edit anything before posting.</b>`;
+      refresh();
+    },
+  });
 
   postBtn.onclick = async () => {
     if (!draft.coords) { toast('Turn on location first', 'err'); return; }
@@ -494,17 +612,10 @@ function detailMap(p) {
   if (p.lat == null || p.lng == null) return null;
   const card = h(`<div class="map-card detail-map"><div class="gmap"></div></div>`);
   const el = card.querySelector('.gmap');
-  loadMaps().then((maps) => {
-    const center = { lat: p.lat, lng: p.lng };
-    const map = new maps.Map(el, {
-      center, zoom: 16, disableDefaultUI: true, zoomControl: true,
-      gestureHandling: 'greedy', clickableIcons: false,
-    });
-    new maps.Marker({ position: center, map, icon: pinIcon(maps, p.stream === 'good') });
-  }).catch(() => {
-    el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
-      '<span>Set a Google Maps API key to enable the map.</span></div>';
-  });
+  getEngine().then(({ create }) => {
+    const M = create(el, [p.lat, p.lng], 16);
+    M.addPin(p.lat, p.lng, p.stream === 'good');
+  }).catch(() => mapFallback(el));
   return card;
 }
 
@@ -589,16 +700,18 @@ function renderShell(centerNode) {
       <div class="spacer"></div>
       <div class="me">
         <div class="av">${esc(u.avatar || '·')}</div>
-        <div><b>${esc(u.name)}</b><span>${u.neighborhood ? esc(u.neighborhood) + ' · ' : ''}Lv. ${u.level} ${esc(u.levelTitle)}</span></div>
+        <div><b>${esc(u.name)}</b><span>${u.neighborhood ? esc(u.neighborhood) + ' · ' : ''}${esc(t('Lv.'))} ${u.level} ${esc(u.levelTitle)}</span></div>
       </div>
-      <button class="signout">Sign out</button>
+      <div class="rail-foot"></div>
+      <button class="signout">${esc(t('Sign out'))}</button>
     </aside>`);
   const navSlot = rail.querySelector('.nav-slot');
   NAV.forEach((n) => {
-    const item = h(`<button class="nav-i ${state.view === n.key ? 'on' : ''}" data-help="nav-${n.key}">${ICONS[n.icon]}${n.label}</button>`);
+    const item = h(`<button class="nav-i ${state.view === n.key ? 'on' : ''}" data-help="nav-${n.key}">${ICONS[n.icon]}${esc(t(n.label))}</button>`);
     item.onclick = () => go(n.key);
     navSlot.appendChild(item);
   });
+  rail.querySelector('.rail-foot').appendChild(langSwitcher());
   rail.querySelector('.signout').onclick = signOut;
   rail.querySelector('.me').onclick = openAccount;
   rail.querySelector('.me').style.cursor = 'pointer';
@@ -618,18 +731,20 @@ function renderShell(centerNode) {
 }
 
 function mobileTop() {
-  const t = h(`<div class="mobile-top"><div class="brand cjk">优城美市<small>Our Block</small></div></div>`);
-  const out = h(`<button class="signout" style="width:auto;padding:7px 12px;background:var(--card);color:var(--ink-soft);border-color:var(--line)">Sign out</button>`);
+  const bar = h(`<div class="mobile-top"><div class="brand cjk">优城美市<small>Our Block</small></div></div>`);
+  const right = h(`<div class="mobile-top-right"></div>`);
+  const out = h(`<button class="signout" style="width:auto;padding:7px 12px;background:var(--card);color:var(--ink-soft);border-color:var(--line)">${esc(t('Sign out'))}</button>`);
   out.onclick = signOut;
-  t.appendChild(out);
-  return t;
+  right.append(langSwitcher('compact'), out);
+  bar.appendChild(right);
+  return bar;
 }
 
 function mobileNav() {
   const nav = h(`<nav class="pnav"></nav>`);
   [['near', 'Map', 'near'], ['care', 'Care', 'care'], ['impact', 'Impact', 'impact'], ['community', 'Me', 'community']]
     .forEach(([key, label, icon]) => {
-      const b = h(`<button class="${state.view === key ? 'on' : ''}">${ICONS[icon]}${label}</button>`);
+      const b = h(`<button class="${state.view === key ? 'on' : ''}">${ICONS[icon]}${esc(t(label))}</button>`);
       b.onclick = () => go(key);
       nav.appendChild(b);
     });
@@ -706,17 +821,17 @@ function feedView() {
   wrap.appendChild(h(`
     <div class="locbar">
       <div class="gps">${ICONS.pin.replace('currentColor', '#234E3F')}</div>
-      <div><b>${esc(state.user.neighborhood || 'Your area')}</b><span>Showing places near you</span></div>
+      <div><b>${esc(state.user.neighborhood || t('Your area'))}</b><span>${esc(t('Showing places near you'))}</span></div>
       <span class="live"></span>
     </div>`));
 
   // header + stream toggle
   const top = h(`
     <div class="toprow">
-      <h2>${isNear ? 'Near Me' : meta.title}<small class="count-sub">…</small></h2>
+      <h2>${isNear ? esc(t('Near Me')) : esc(t(meta.title))}<small class="count-sub">…</small></h2>
       <div class="seg">
-        <button class="${state.stream === 'good' ? 'on good' : 'good'}" data-s="good">✦ The Good</button>
-        <button class="${state.stream === 'care' ? 'on care' : 'care'}" data-s="care">△ Needs Care</button>
+        <button class="${state.stream === 'good' ? 'on good' : 'good'}" data-s="good">✦ ${esc(t('The Good'))}</button>
+        <button class="${state.stream === 'care' ? 'on care' : 'care'}" data-s="care">△ ${esc(t('Needs Care'))}</button>
       </div>
     </div>`);
   top.querySelectorAll('[data-s]').forEach((b) => {
@@ -727,9 +842,9 @@ function feedView() {
   // sort pills
   const sorts = h(`
     <div class="sortbar">
-      <span class="lbl">Sort</span>
+      <span class="lbl">${esc(t('Sort'))}</span>
       ${[['near', 'Nearest'], ['new', 'Newest'], ['top', 'Most cheered']]
-        .map(([k, l]) => `<button class="pill ${state.sort === k ? 'on' : ''}" data-sort="${k}">${l}</button>`).join('')}
+        .map(([k, l]) => `<button class="pill ${state.sort === k ? 'on' : ''}" data-sort="${k}">${esc(t(l))}</button>`).join('')}
     </div>`);
   sorts.querySelectorAll('[data-sort]').forEach((b) => {
     b.onclick = () => { state.sort = b.dataset.sort; render(); };
@@ -754,61 +869,160 @@ async function loadFeed(feed, countEl, offset = 0) {
     );
     if (offset === 0) feed.innerHTML = '';
     else feed.querySelector('.load-more-wrap')?.remove();
-    if (countEl) countEl.textContent = `${total} ${state.stream === 'good' ? 'good things nearby' : 'places that need care'}`;
+    if (countEl) countEl.textContent = tf(state.stream === 'good' ? '{n} good things nearby' : '{n} places that need care', { n: total });
     if (!total) {
-      feed.appendChild(h(`<div class="empty"><b>Nothing here yet</b>Be the first to capture something on your block.</div>`));
+      feed.appendChild(h(`<div class="empty"><b>${esc(t('Nothing here yet'))}</b>${esc(t('Be the first to capture something on your block.'))}</div>`));
       return;
     }
     posts.forEach((p) => feed.appendChild(postCard(p)));
     if (hasMore) {
-      const wrap = h(`<div class="load-more-wrap" style="grid-column:1/-1;text-align:center;margin-top:6px"><button class="pill">Load more</button></div>`);
+      const wrap = h(`<div class="load-more-wrap" style="grid-column:1/-1;text-align:center;margin-top:6px"><button class="pill">${esc(t('Load more'))}</button></div>`);
       wrap.querySelector('button').onclick = () => loadFeed(feed, countEl, offset + posts.length);
       feed.appendChild(wrap);
     }
   } catch (err) {
     if (offset === 0) feed.innerHTML = '';
-    feed.appendChild(h(`<div class="empty"><b>Couldn't load the feed</b>${esc(err.message)}</div>`));
+    feed.appendChild(h(`<div class="empty"><b>${esc(t("Couldn't load the feed"))}</b>${esc(err.message)}</div>`));
   }
 }
 
 /* --------------------------------------------------------------- post card */
+// Proximity reveal — "Our Block" is hyper-local: you can only read a message's full text
+// and photo when you're near where it was posted. The thumbnail and title still show (with
+// the measured distance) so neighbours know something is there. Owners and admins are never
+// gated; an unknown distance (no viewer location) reveals, so the app still works offline.
+const REVEAL_RADIUS_M = 500;
+const REVEAL_LABEL = '500 m';
+function canReveal(p) {
+  if (state.user && (p.author?.id === state.user.id || state.user.isAdmin)) return true;
+  return p.distanceM == null || p.distanceM <= REVEAL_RADIUS_M;
+}
+
 function postCard(p) {
   const g = p.stream === 'good';
-  const card = h(`<article class="post"></article>`);
-
-  const media = h(`<div class="media ${g ? 'g' : 'c'}"></div>`);
-  if (p.mediaUrl) {
-    media.appendChild(p.mediaType === 'video'
-      ? h(`<video src="${esc(p.mediaUrl)}" muted playsinline preload="metadata"></video>`)
-      : h(`<img src="${esc(p.mediaUrl)}" alt="">`));
-  }
-  if (p.mediaType === 'video') media.appendChild(h(`<div class="play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>`));
-  if (p.ai?.tag) media.appendChild(h(`<span class="ai-tag">${ICONS.spark}${esc(p.ai.tag)}</span>`));
-  if (p.stream === 'care' && p.status !== 'open')
-    media.appendChild(h(`<span class="status-tag ${p.status}">${esc(STATUS_LABEL[p.status])}</span>`));
-  media.appendChild(h(`<span class="badge">${p.mediaType === 'video' ? `▶ Video${p.durationS ? ' · 0:' + String(p.durationS).padStart(2, '0') : ''}` : '◎ Photo'}</span>`));
-  media.onclick = () => go(`post/${p.id}`);
-  card.appendChild(media);
+  const card = h(`<article class="post compact"></article>`);
+  const far = !canReveal(p);
 
   const body = h(`<div class="pbody"></div>`);
   const title = h(`<h3>${esc(p.title)}</h3>`);
-  title.onclick = () => go(`post/${p.id}`);
+  title.onclick = () => openPostModal(p);
   body.appendChild(title);
   body.appendChild(h(`<div class="pmeta">
-      <span>📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
-      <span>· by ${esc(p.author?.name || 'Neighbour')}</span>
+      <span>📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
+      <span>· ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })}</span>
       <span>· ${timeAgo(p.createdAt)}</span>
     </div>`));
+
+  // Tags that used to overlay the photo banner now sit above the message.
+  const tags = h(`<div class="ptags"></div>`);
+  if (p.ai?.tag) tags.appendChild(h(`<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>`));
+  if (p.stream === 'care' && p.status !== 'open')
+    tags.appendChild(h(`<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status]))}</span>`));
+  if (tags.children.length) body.appendChild(tags);
+
+  // Message: a small thumbnail beside the description. The photo/video is no longer shown
+  // full-size in the feed — tapping the thumbnail or text opens the popup. When the viewer
+  // is too far from where it was posted, the thumbnail is blurred and the text is withheld.
+  const msg = h(`<div class="pmsg${far ? ' locked' : ''}"></div>`);
+  if (p.mediaUrl) {
+    const thumb = h(`<button class="pthumb ${g ? 'g' : 'c'}${far ? ' locked' : ''}" type="button" aria-label="${esc(t('View full message'))}">
+      ${p.mediaType === 'video'
+        ? `<video src="${esc(p.mediaUrl)}#t=0.1" muted playsinline preload="metadata"></video><span class="thumb-play">▶</span>`
+        : `<img src="${esc(p.mediaUrl)}" alt="" loading="lazy">`}
+      ${far ? '<span class="thumb-lock">🔒</span>' : ''}
+    </button>`);
+    thumb.onclick = () => openPostModal(p);
+    msg.appendChild(thumb);
+  }
+  const desc = far
+    ? h(`<p class="pdesc locked-note">🔒 ${tf('{dist} — come within {radius} of where it was posted to read it.', { dist: p.distanceM != null ? tf('{d} away', { d: dist(p.distanceM) }) : t('Nearby'), radius: REVEAL_LABEL })}</p>`)
+    : p.body
+      ? h(`<p class="pdesc">${esc(p.body)}</p>`)
+      : h(`<p class="pdesc muted">${p.mediaUrl ? esc(t('Tap to read the full message.')) : ''}</p>`);
+  desc.onclick = () => openPostModal(p);
+  msg.appendChild(desc);
+  body.appendChild(msg);
 
   // AI action suggestion for care items routed to the city
   if (p.stream === 'care' && p.ai?.action === 'city' && p.status === 'open') {
     body.appendChild(h(`<div class="suggest">${ICONS.spark}
-      <div><b>AI suggests: this needs the city</b><p>${esc(p.ai.summary || '')}</p></div></div>`));
+      <div><b>${esc(t('AI suggests: this needs the city'))}</b><p>${esc(p.ai.summary || '')}</p></div></div>`));
   }
 
   body.appendChild(reactionRow(p, card));
   card.appendChild(body);
   return card;
+}
+
+/* A lightweight popup showing the full message + full-size photo/video. Tapping a feed
+ * card's thumbnail, title, or description opens it; the full detail page (with replies)
+ * is one tap away. Closes on ×, backdrop click, or Escape. */
+let _modalEsc = null;
+function openPostModal(p) {
+  const g = p.stream === 'good';
+  const far = !canReveal(p); // too far from where it was posted → withhold photo + full text
+  const overlay = h(`<div class="modal-overlay"></div>`);
+  const cardEl = h(`<div class="modal-card"></div>`);
+
+  if (p.mediaUrl && !far) {
+    const media = h(`<div class="modal-media"></div>`);
+    media.appendChild(p.mediaType === 'video'
+      ? h(`<video src="${esc(p.mediaUrl)}" controls autoplay playsinline></video>`)
+      : h(`<img src="${esc(p.mediaUrl)}" alt="">`));
+    cardEl.appendChild(media);
+  }
+  cardEl.appendChild(h(`<div class="modal-text">
+      <div class="ptags">
+        <span class="badge-stream ${g ? 'g' : 'c'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>
+        ${p.ai?.tag ? `<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>` : ''}
+        ${p.stream === 'care' && p.status !== 'open' ? `<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
+      </div>
+      <h2>${esc(p.title)}</h2>
+      <div class="pmeta">
+        <span>📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
+        <span>· ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })}</span>
+        <span>· ${timeAgo(p.createdAt)}</span>
+      </div>
+      ${far
+        ? `<div class="modal-locked">🔒<div><b>${p.distanceM != null ? esc(tf('{d} away', { d: dist(p.distanceM) })) : esc(t('You’re not nearby'))}</b>
+             <p>${tf('This message and its photo unlock when you’re within {radius} of where it was posted.', { radius: REVEAL_LABEL })}</p></div></div>`
+        : (p.body ? `<p class="pdesc">${esc(p.body)}</p>` : '')}
+      <div class="modal-actions">
+        ${far ? '' : `<a class="modal-open-full" href="#/post/${p.id}">${esc(t('Open full post & replies ›'))}</a>`}
+      </div>
+    </div>`));
+
+  const close = h(`<button class="modal-close" type="button" aria-label="${esc(t('Close'))}">×</button>`);
+  cardEl.appendChild(close);
+  overlay.appendChild(cardEl);
+
+  const dismiss = () => {
+    overlay.remove();
+    if (_modalEsc) { document.removeEventListener('keydown', _modalEsc); _modalEsc = null; }
+  };
+
+  // Owner or admin (TEACHER_EMAILS) can delete; admin can remove any post.
+  const isOwner = state.user && p.author?.id === state.user.id;
+  if (state.user && (isOwner || state.user.isAdmin)) {
+    const del = h(`<button class="modal-del" type="button">🗑 ${isOwner ? esc(t('Remove')) : esc(t('Delete (admin)'))}</button>`);
+    del.onclick = async () => {
+      if (!confirm(isOwner ? t('Remove this post? This cannot be undone.') : t('Delete this neighbour’s post as admin? This cannot be undone.'))) return;
+      try {
+        await api.del(`/api/posts/${p.id}`);
+        toast(t('Post removed'), 'ok');
+        dismiss();
+        render(); // refresh the feed so the deleted card disappears
+      } catch (e) { toast(e.message, 'err'); }
+    };
+    cardEl.querySelector('.modal-actions').appendChild(del);
+  }
+  close.onclick = dismiss;
+  overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+  cardEl.querySelector('.modal-open-full')?.addEventListener('click', dismiss); // null when far; hash routes to detail
+  _modalEsc = (e) => { if (e.key === 'Escape') dismiss(); };
+  document.addEventListener('keydown', _modalEsc);
+
+  document.body.appendChild(overlay);
 }
 
 function reactionRow(p, cardEl) {
@@ -831,17 +1045,17 @@ function reactionRow(p, cardEl) {
   };
 
   if (g) {
-    row.append(mk('cheer', '👏 Cheer', 'cheer'), mk('help', "🙌 I'll help tend it"));
+    row.append(mk('cheer', `👏 ${esc(t('Cheer'))}`, 'cheer'), mk('help', `🙌 ${esc(t("I'll help tend it"))}`));
   } else {
     if (p.ai?.action === 'city' && (p.status === 'open' || p.status === 'rallying') && p.author?.id === state.user.id) {
-      const send = h(`<button class="rbtn act">${ICONS.send} Send report</button>`);
+      const send = h(`<button class="rbtn act">${ICONS.send} ${esc(t('Send report'))}</button>`);
       send.onclick = () => advance(p.id, 'send_report');
       row.appendChild(send);
     }
-    row.append(mk('metoo', '🙋 Me too here'), mk('help', "🙌 I'll help"));
+    row.append(mk('metoo', `🙋 ${esc(t('Me too here'))}`), mk('help', `🙌 ${esc(t("I'll help"))}`));
   }
-  const share = h(`<button class="rbtn">⤷ Share</button>`);
-  share.onclick = () => { navigator.clipboard?.writeText(location.origin + '/#/post/' + p.id); toast('Link copied', 'ok'); };
+  const share = h(`<button class="rbtn">⤷ ${esc(t('Share'))}</button>`);
+  share.onclick = () => { navigator.clipboard?.writeText(location.origin + '/#/post/' + p.id); toast(t('Link copied'), 'ok'); };
   row.appendChild(share);
   return row;
 }
@@ -849,130 +1063,273 @@ function reactionRow(p, cardEl) {
 async function advance(id, action) {
   try {
     await api.post(`/api/posts/${id}/advance`, { action });
-    toast(action === 'send_report' ? 'Report sent to District Works' : 'Loop updated', 'ok');
+    toast(action === 'send_report' ? t('Report sent to District Works') : t('Loop updated'), 'ok');
     render();
   } catch (e) { toast(e.message, 'err'); }
 }
 
 /* ----------------------------------------------------------------- the map */
-// Load the Google Maps JS SDK once, on demand, with the key from /api/auth/config.
-// Returns a promise that resolves to `google.maps` (rejects if no key / load fails).
-let _mapsPromise;
-function loadMaps() {
-  if (_mapsPromise) return _mapsPromise;
-  const key = state.config.mapsApiKey;
-  if (!key) return Promise.reject(new Error('Maps not configured'));
-  _mapsPromise = new Promise((resolve, reject) => {
-    window.__obMapsReady = () => resolve(window.google.maps);
-    const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}`
-          + '&loading=async&callback=__obMapsReady';
-    s.async = true;
-    s.onerror = () => reject(new Error('Maps failed to load'));
-    document.head.appendChild(s);
-  });
-  return _mapsPromise;
+// Hybrid maps. The app picks a provider once per session based on the browser's own
+// location: 高德/Amap in mainland China (where Google Maps JS is unreachable), Google
+// elsewhere, and self-hosted Leaflet (tiles proxied through /api/maps/tiles/...) if neither
+// loads. All three expose the same tiny engine interface so the three map views below are
+// provider-agnostic. Reverse geocoding always goes through our server, so it works
+// regardless of provider.
+
+const GOOGLE_BLOCKED = new Set(['CN']); // mainland China — Google Maps JS is unreachable
+
+// China lat/lng bounding box. Drives both provider auto-detection and the GCJ-02 datum
+// shift below (Amap, like all China map providers, uses GCJ-02 rather than raw WGS-84 GPS).
+const inChinaBounds = (lat, lng) =>
+  lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271;
+
+// WGS-84 (GPS) → GCJ-02 (the datum Amap renders in). Without this, China pins land
+// ~300–500m off. Outside China the two datums coincide, so coords pass through unchanged.
+function wgs84ToGcj02(lat, lng) {
+  if (!inChinaBounds(lat, lng)) return [lat, lng];
+  const a = 6378245.0, ee = 0.00669342162296594323;
+  const x = lng - 105.0, y = lat - 35.0;
+  const trig = (v) => 2 / 3 * (20 * Math.sin(6 * v * Math.PI) + 20 * Math.sin(2 * v * Math.PI));
+  let dLat = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x))
+    + trig(x) + 2 / 3 * (20 * Math.sin(y * Math.PI) + 40 * Math.sin(y / 3 * Math.PI))
+    + 2 / 3 * (160 * Math.sin(y / 12 * Math.PI) + 320 * Math.sin(y * Math.PI / 30));
+  let dLng = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x))
+    + trig(x) + 2 / 3 * (20 * Math.sin(x * Math.PI) + 40 * Math.sin(x / 3 * Math.PI))
+    + 2 / 3 * (150 * Math.sin(x / 12 * Math.PI) + 300 * Math.sin(x / 30 * Math.PI));
+  const radLat = lat / 180 * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180) / (a * (1 - ee) / (magic * sqrtMagic) * Math.PI);
+  dLng = (dLng * 180) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+  return [lat + dLat, lng + dLng];
 }
 
-/** Turn coordinates into a {placeName, neighborhood} via Google's Geocoder. */
+// Is the browser in China? Prefer its real location, then the edge geo-IP hint, then
+// locale/timezone (the only signal available in local dev, where the geo header is empty).
+function browserInChina() {
+  const u = state.user || {};
+  if (u.lat != null && u.lng != null) return inChinaBounds(u.lat, u.lng);
+  const cc = (state.config && state.config.country || '').toUpperCase();
+  if (cc) return cc === 'CN';
+  try {
+    if (/Shanghai|Chongqing|Harbin|Urumqi|Kashgar/.test(Intl.DateTimeFormat().resolvedOptions().timeZone || '')) return true;
+  } catch { /* Intl unavailable */ }
+  return /^zh[-_]?CN/i.test(navigator.language || navigator.userLanguage || '');
+}
+
+let _googlePromise;
+function loadGoogle(key, timeoutMs = 4000) {
+  if (_googlePromise) return _googlePromise;
+  _googlePromise = new Promise((resolve, reject) => {
+    const to = setTimeout(() => reject(new Error('google maps timeout')), timeoutMs);
+    window.__obMapsReady = () => { clearTimeout(to); resolve(window.google.maps); };
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=__obMapsReady`;
+    s.async = true;
+    s.onerror = () => { clearTimeout(to); reject(new Error('google maps failed')); };
+    document.head.appendChild(s);
+  });
+  return _googlePromise;
+}
+
+let _amapPromise;
+function loadAmap(key, timeoutMs = 6000) {
+  if (_amapPromise) return _amapPromise;
+  _amapPromise = new Promise((resolve, reject) => {
+    const to = setTimeout(() => reject(new Error('amap timeout')), timeoutMs);
+    const s = document.createElement('script');
+    s.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}`;
+    s.async = true;
+    s.onload = () => { clearTimeout(to); window.AMap ? resolve(window.AMap) : reject(new Error('amap failed')); };
+    s.onerror = () => { clearTimeout(to); reject(new Error('amap failed')); };
+    document.head.appendChild(s);
+  });
+  return _amapPromise;
+}
+function leafletReady() {
+  if (window.L) return Promise.resolve(window.L);
+  return new Promise((resolve, reject) => {
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.L) { clearInterval(t); resolve(window.L); }
+      else if (++n > 60) { clearInterval(t); reject(new Error('Leaflet failed to load')); }
+    }, 50);
+  });
+}
+
+// ── engine adapters — same interface, two backends ───────────────────────────
+const googleEngine = (g) => (el, center, zoom) => {
+  const map = new g.Map(el, {
+    center: { lat: center[0], lng: center[1] }, zoom,
+    disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy', clickableIcons: false,
+  });
+  const youIcon = { path: g.SymbolPath.CIRCLE, scale: 7, fillColor: '#234E3F', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 };
+  const pinIcon = (good) => ({
+    path: 'M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z',
+    fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2, anchor: new g.Point(0, 34),
+  });
+  return {
+    addPin: (lat, lng, good, onClick) => { const m = new g.Marker({ position: { lat, lng }, map, icon: pinIcon(good) }); if (onClick) m.addListener('click', onClick); return m; },
+    addYou: (lat, lng) => new g.Marker({ position: { lat, lng }, map, icon: youIcon, zIndex: 999 }),
+    move: (m, lat, lng) => m.setPosition({ lat, lng }),
+    remove: (m) => m.setMap(null),
+    fit: (pts, maxZoom) => { if (!pts.length) return; const b = new g.LatLngBounds(); pts.forEach((p) => b.extend({ lat: p[0], lng: p[1] })); map.fitBounds(b, 48); g.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > maxZoom) map.setZoom(maxZoom); }); },
+    view: (c, z) => { map.setCenter({ lat: c[0], lng: c[1] }); map.setZoom(z); },
+    zoom: () => map.getZoom(),
+  };
+};
+const leafletEngine = (L) => (el, center, zoom) => {
+  const map = L.map(el, { zoomControl: true }).setView(center, zoom);
+  L.tileLayer('/api/maps/tiles/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+  setTimeout(() => map.invalidateSize(), 60); // container may have sized after init
+  const youStyle = { radius: 7, color: '#fff', weight: 3, fillColor: '#234E3F', fillOpacity: 1 };
+  const pinStyle = (good) => ({ radius: 8, color: '#fff', weight: 2, fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1 });
+  return {
+    addPin: (lat, lng, good, onClick) => { const m = L.circleMarker([lat, lng], pinStyle(good)).addTo(map); if (onClick) m.on('click', onClick); return m; },
+    addYou: (lat, lng) => L.circleMarker([lat, lng], youStyle).addTo(map),
+    move: (m, lat, lng) => m.setLatLng([lat, lng]),
+    remove: (m) => map.removeLayer(m),
+    fit: (pts, maxZoom) => { if (pts.length) map.fitBounds(pts, { padding: [35, 35], maxZoom }); },
+    view: (c, z) => map.setView(c, z),
+    zoom: () => map.getZoom(),
+  };
+};
+
+// 高德/Amap adapter. Amap takes [lng, lat] (note the order) in the GCJ-02 datum, so every
+// WGS-84 lat/lng coming from the app is converted on the way in — keeping the rest of the
+// app provider-agnostic and our stored coordinates pure WGS-84.
+const amapEngine = (AMap) => (el, center, zoom) => {
+  const toPos = (lat, lng) => { const g = wgs84ToGcj02(lat, lng); return [g[1], g[0]]; }; // → [lng, lat]
+  const map = new AMap.Map(el, { center: toPos(center[0], center[1]), zoom, zooms: [2, 19] });
+  setTimeout(() => map.resize && map.resize(), 60); // container may have sized after init
+  const youStyle = { radius: 7, strokeColor: '#fff', strokeWeight: 3, fillColor: '#234E3F', fillOpacity: 1 };
+  const pinStyle = (good) => ({ radius: 8, strokeColor: '#fff', strokeWeight: 2, fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1 });
+  const mk = (lat, lng, style, onClick, z) => {
+    const m = new AMap.CircleMarker({ center: toPos(lat, lng), bubble: true, cursor: onClick ? 'pointer' : 'default', zIndex: z, ...style });
+    map.add(m);
+    if (onClick) m.on('click', onClick);
+    return m;
+  };
+  return {
+    addPin: (lat, lng, good, onClick) => mk(lat, lng, pinStyle(good), onClick, 10),
+    addYou: (lat, lng) => mk(lat, lng, youStyle, null, 999),
+    move: (m, lat, lng) => m.setCenter(toPos(lat, lng)),
+    remove: (m) => map.remove(m),
+    fit: (pts, maxZoom) => {
+      if (!pts.length) return;
+      const ps = pts.map((p) => toPos(p[0], p[1]));
+      if (ps.length === 1) { map.setZoomAndCenter(maxZoom, ps[0]); return; }
+      const lngs = ps.map((p) => p[0]), lats = ps.map((p) => p[1]);
+      map.setBounds(new AMap.Bounds([Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]));
+      map.on('zoomend', function clamp() { map.off('zoomend', clamp); if (map.getZoom() > maxZoom) map.setZoom(maxZoom); });
+    },
+    view: (c, z) => map.setZoomAndCenter(z, toPos(c[0], c[1])),
+    zoom: () => map.getZoom(),
+  };
+};
+
+// Remember which provider actually loaded, so we don't re-pay a blocked provider's timeout
+// (e.g. Google behind the GFW) on every page load. Only real maps are cached, never Leaflet.
+const MAP_CACHE_KEY = 'ob.mapProvider';
+const cachedProvider = () => { try { return localStorage.getItem(MAP_CACHE_KEY) || ''; } catch { return ''; } };
+const rememberProvider = (k) => { try { localStorage.setItem(MAP_CACHE_KEY, k); } catch { /* private mode */ } };
+
+// Choose a provider once per session, then cache it. Order in `auto`: Amap first when the
+// browser looks like it's in China, otherwise Google — but if Google can't load (a timeout
+// is the GFW's signature, i.e. China after all), fall back to Amap before Leaflet. So a
+// blocked Google always lands on Amap, even when location detection missed China.
+// MAP_PROVIDER forces a specific provider. Each loader can fail → we try the next.
+let _enginePromise;
+function getEngine() {
+  if (_enginePromise) return _enginePromise;
+  _enginePromise = (async () => {
+    const { mapsApiKey: gkey, amapKey = '', country = '', mapProvider = 'auto' } = state.config || {};
+    const cn = browserInChina();
+    const tryAmap = async () => amapKey && { create: amapEngine(await loadAmap(amapKey)), kind: 'amap' };
+    const allowGoogle = gkey && (mapProvider === 'google' ||
+      (mapProvider === 'auto' && !GOOGLE_BLOCKED.has(country.toUpperCase())));
+    const tryGoogle = async () => allowGoogle && { create: googleEngine(await loadGoogle(gkey)), kind: 'google' };
+
+    // Forced providers: honour exactly, fall through to Leaflet only if they can't load.
+    if (mapProvider === 'amap') { try { const e = await tryAmap(); if (e) return e; } catch { /* → leaflet */ } }
+    else if (mapProvider === 'google') { try { const e = await tryGoogle(); if (e) return e; } catch { /* → leaflet */ } }
+    else {
+      // auto: lead with the likely-reachable provider, then try the other before Leaflet.
+      // A previously-successful provider jumps the queue so blocked ones aren't retried.
+      const byKind = { amap: tryAmap, google: tryGoogle };
+      const base = cn ? [tryAmap, tryGoogle] : [tryGoogle, tryAmap];
+      const lead = byKind[cachedProvider()];
+      const order = lead ? [lead, ...base.filter((f) => f !== lead)] : base;
+      for (const attempt of order) {
+        try { const e = await attempt(); if (e) { rememberProvider(e.kind); return e; } } catch { /* try next */ }
+      }
+    }
+    return { create: leafletEngine(await leafletReady()), kind: 'leaflet' };
+  })();
+  return _enginePromise;
+}
+
+/** Reverse geocode a point via our server (works regardless of map provider). */
 async function reverseGeocode(lat, lng) {
   try {
-    const maps = await loadMaps();
-    const { results } = await new maps.Geocoder().geocode({ location: { lat, lng } });
-    if (!results || !results.length) return null;
-    const comps = results.flatMap((r) => r.address_components || []);
-    const pick = (type) => comps.find((c) => c.types.includes(type))?.long_name;
-    const placeName = pick('route') || pick('neighborhood')
-      || results[0].formatted_address?.split(',')[0] || null;
-    const neighborhood = pick('neighborhood') || pick('sublocality') || pick('locality') || null;
-    return { placeName, neighborhood };
+    const r = await api.get(`/api/maps/geocode/reverse?lat=${lat}&lng=${lng}`);
+    return { placeName: r.placeName || null, neighborhood: r.neighborhood || null };
   } catch { return null; }
 }
 
-function youIcon(maps) {
-  return { path: maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#234E3F', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 };
-}
-function pinIcon(maps, good) {
-  return {
-    path: 'M0 0 C-9 0 -14 7 -14 14 C-14 24 0 34 0 34 C0 34 14 24 14 14 C14 7 9 0 0 0Z',
-    fillColor: good ? '#E2A02E' : '#C0613A', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2,
-    anchor: new maps.Point(0, 34),
-  };
-}
+const mapFallback = (el) => {
+  el.innerHTML = '<div class="map-fallback"><b>Map unavailable</b>' +
+    '<span>The map service could not be reached.</span></div>';
+};
 
 function mapCard(streamFilter) {
   const card = h(`
     <div class="map-card">
-      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || 'Locating…')}</span></div>
+      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || t('Locating…'))}</span></div>
       <div class="gmap"></div>
     </div>`);
   const el = card.querySelector('.gmap');
   const nameEl = card.querySelector('.loc-name');
 
-  loadMaps().then(async (maps) => {
+  getEngine().then(async ({ create }) => {
     let data = { pins: [], viewer: null };
     try { data = await api.get('/api/posts/pins'); } catch { /* show base map */ }
     // On the Good/Care views, show only that stream's pins; on Near Me, show all.
     const pins = streamFilter ? data.pins.filter((p) => p.stream === streamFilter) : data.pins;
 
     const viewerCenter =
-      data.viewer && data.viewer.lat != null ? { lat: data.viewer.lat, lng: data.viewer.lng }
-      : state.user.lat != null && state.user.lng != null ? { lat: state.user.lat, lng: state.user.lng }
+      data.viewer && data.viewer.lat != null ? [data.viewer.lat, data.viewer.lng]
+      : state.user.lat != null && state.user.lng != null ? [state.user.lat, state.user.lng]
       : null;
 
-    const map = new maps.Map(el, {
-      center: viewerCenter || { lat: 20, lng: 0 },
-      zoom: viewerCenter ? 15 : 2,
-      disableDefaultUI: true,
-      zoomControl: true,
-      gestureHandling: 'greedy',
-      clickableIcons: false,
-    });
+    const M = create(el, viewerCenter || [20, 0], viewerCenter ? 15 : 2);
 
-    // One reusable "you" marker we can move once the real GPS fix arrives.
-    let youMarker = null;
-    const setYou = (pos) => {
-      if (youMarker) youMarker.setPosition(pos);
-      else youMarker = new maps.Marker({ position: pos, map, icon: youIcon(maps), title: 'You', zIndex: 999 });
-    };
+    let youM = null;
+    const setYou = (c) => { if (youM) M.move(youM, c[0], c[1]); else youM = M.addYou(c[0], c[1]); };
 
-    const bounds = new maps.LatLngBounds();
-    if (viewerCenter) { setYou(viewerCenter); bounds.extend(viewerCenter); }
+    const bounds = [];
+    if (viewerCenter) { setYou(viewerCenter); bounds.push(viewerCenter); }
     pins.filter((p) => p.lat != null).forEach((p) => {
-      const m = new maps.Marker({
-        position: { lat: p.lat, lng: p.lng }, map,
-        icon: pinIcon(maps, p.stream === 'good'), title: p.title || '',
-      });
-      m.addListener('click', () => go(`post/${p.id}`));
-      bounds.extend({ lat: p.lat, lng: p.lng });
+      M.addPin(p.lat, p.lng, p.stream === 'good', () => go(`post/${p.id}`));
+      bounds.push([p.lat, p.lng]);
     });
+    if (pins.length) M.fit(bounds, 16);
 
-    // Frame everything, but never zoom in too far on a lone pin.
-    if (pins.length && !bounds.isEmpty()) {
-      map.fitBounds(bounds, 64);
-      maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > 16) map.setZoom(16); });
-    }
-
-    // Ask the browser for the real location, then recentre on it and persist it
-    // (so the stale profile default — e.g. the old Shanghai coords — is replaced).
+    // Ask the browser for the real location, recentre on it and persist it.
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const here = [pos.coords.latitude, pos.coords.longitude];
         setYou(here);
-        // Don't yank the view away from real pins; recentre only when none are framed.
-        if (!data.pins.length) { map.setCenter(here); if (map.getZoom() < 14) map.setZoom(15); }
-        const geo = await reverseGeocode(here.lat, here.lng);
+        if (!pins.length) M.view(here, Math.max(M.zoom(), 15)); // don't yank away from pins
+        const geo = await reverseGeocode(here[0], here[1]);
         if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
-        api.put('/api/auth/me/location', { ...here, neighborhood: geo?.neighborhood || null })
+        api.put('/api/auth/me/location', { lat: here[0], lng: here[1], neighborhood: geo?.neighborhood || null })
           .then(({ user }) => { state.user = user; }).catch(() => {});
       }, () => { /* permission denied → keep profile location */ },
       { enableHighAccuracy: true, timeout: 8000 });
     }
-  }).catch(() => {
-    el.innerHTML =
-      '<div class="map-fallback"><b>Map unavailable</b>' +
-      '<span>Set a Google Maps API key (MAPS_API_KEY) to enable the live map.</span></div>';
-  });
+  }).catch(() => mapFallback(el));
 
   return card;
 }
@@ -983,12 +1340,12 @@ function sidePanel() {
 
   const cta = h(`
     <div class="capture-cta">
-      <b>Notice something?</b>
-      <p>Capture the good or the needs-care. Location is attached automatically on mobile.</p>
+      <b>${esc(t('Notice something?'))}</b>
+      <p>${esc(t('Capture the good or the needs-care. Location is attached automatically on mobile.'))}</p>
       <div class="cap-row">
-        <button class="cap-btn" data-mode="photo">${ICONS.camera}Photo</button>
-        <button class="cap-btn" data-mode="video">${ICONS.video}Video</button>
-        <button class="cap-btn solid" data-mode="pin">${ICONS.pin}Pin</button>
+        <button class="cap-btn" data-mode="photo">${ICONS.camera}${esc(t('Photo'))}</button>
+        <button class="cap-btn" data-mode="video">${ICONS.video}${esc(t('Video'))}</button>
+        <button class="cap-btn solid" data-mode="pin">${ICONS.pin}${esc(t('Pin'))}</button>
       </div>
     </div>`);
   cta.querySelectorAll('[data-mode]').forEach((b) => (b.onclick = () => go('capture')));
@@ -996,36 +1353,36 @@ function sidePanel() {
 
   side.appendChild(h(`
     <div class="panel">
-      <h4>👏 Capitalization in action <span class="tagpin">Active-constructive</span></h4>
-      <p>Reactions aren't passive "likes." Neighbours reply with <strong>Cheer</strong>, <strong>I'll join</strong>, or <strong>Me too here</strong> — the enthusiastic responses that amplify a sharer's wellbeing.</p>
+      <h4>👏 ${esc(t('Capitalization in action'))} <span class="tagpin">${esc(t('Active-constructive'))}</span></h4>
+      <p>${tf('Reactions aren\'t passive "likes." Neighbours reply with {a}, {b}, or {c} — the enthusiastic responses that amplify a sharer\'s wellbeing.', { a: `<strong>${esc(t('Cheer'))}</strong>`, b: `<strong>${esc(t("I'll join"))}</strong>`, c: `<strong>${esc(t('Me too here'))}</strong>` })}</p>
     </div>`));
 
-  const impact = h(`<div class="panel"><h4>My impact <span class="tagpin">Intrapersonal</span></h4><div class="impact-slot">…</div></div>`);
+  const impact = h(`<div class="panel"><h4>${esc(t('My impact'))} <span class="tagpin">${esc(t('Intrapersonal'))}</span></h4><div class="impact-slot">…</div></div>`);
   side.appendChild(impact);
-  const community = h(`<div class="panel"><h4>Our block this month <span class="tagpin">Collective efficacy</span></h4><div class="comm-slot">…</div></div>`);
+  const community = h(`<div class="panel"><h4>${esc(t('Our block this month'))} <span class="tagpin">${esc(t('Collective efficacy'))}</span></h4><div class="comm-slot">…</div></div>`);
   side.appendChild(community);
 
-  const loop = h(`<div class="panel"><h4>Loop status · recent care</h4><div class="loop-slot">…</div></div>`);
+  const loop = h(`<div class="panel"><h4>${esc(t('Loop status · recent care'))}</h4><div class="loop-slot">…</div></div>`);
   side.appendChild(loop);
 
   // hydrate
   api.get('/api/stats/me').then((s) => {
     impact.querySelector('.impact-slot').innerHTML = `
-      <div class="stat"><span class="n">${s.acts}</span><span class="l">acts of care this season</span></div>
+      <div class="stat"><span class="n">${s.acts}</span><span class="l">${esc(t('acts of care this season'))}</span></div>
       <div class="bar"><i style="width:${Math.round(s.progress * 100)}%"></i></div>
-      <div class="stat" style="margin-top:12px"><span class="n">${s.resolved}</span><span class="l">items you helped get <strong>resolved</strong></span></div>`;
+      <div class="stat" style="margin-top:12px"><span class="n">${s.resolved}</span><span class="l">${tf('items you helped get {resolved}', { resolved: `<strong>${esc(t('resolved'))}</strong>` })}</span></div>`;
   }).catch(() => {});
   api.get('/api/stats/community').then((c) => {
     community.querySelector('.comm-slot').innerHTML = `
-      <div class="stat"><span class="n">${c.acts}</span><span class="l">acts across ${c.neighbours} neighbours</span></div>
-      <p style="margin-top:4px">↑ ${c.changePct}% vs last month · ${c.resolved} issues closed together</p>`;
+      <div class="stat"><span class="n">${c.acts}</span><span class="l">${tf('acts across {n} neighbours', { n: c.neighbours })}</span></div>
+      <p style="margin-top:4px">${tf('↑ {pct}% vs last month · {n} issues closed together', { pct: c.changePct, n: c.resolved })}</p>`;
   }).catch(() => {});
   api.get('/api/posts?stream=care&sort=new').then(({ posts }) => {
     const withLoop = posts.find((p) => p.loop.length) || posts[0];
     const slot = loop.querySelector('.loop-slot');
-    if (!withLoop) { slot.innerHTML = '<p>No care items being tracked yet.</p>'; return; }
+    if (!withLoop) { slot.innerHTML = `<p>${esc(t('No care items being tracked yet.'))}</p>`; return; }
     slot.innerHTML = `<p style="font-weight:700;color:var(--ink);margin-bottom:9px">${esc(withLoop.title)}</p>` +
-      (withLoop.loop.length ? renderLoopSteps(withLoop.loop) : '<p>Not yet routed.</p>');
+      (withLoop.loop.length ? renderLoopSteps(withLoop.loop) : `<p>${esc(t('Not yet routed.'))}</p>`);
   }).catch(() => {});
 
   return side;
@@ -1043,20 +1400,20 @@ function captureView() {
   const draft = { stream: 'care', mode: 'photo', file: null, mediaUrl: null, mediaType: 'photo', coords: null, place: '', neighborhood: null };
   const wrap = h(`<div class="capture-view"></div>`);
 
-  wrap.appendChild(h(`<div class="back-link">‹ Back to feed</div>`)).onclick = () => history.back();
-  wrap.appendChild(h(`<div class="toprow"><h2>New capture<small>Photo &amp; short video · location attached automatically</small></h2></div>`));
+  wrap.appendChild(h(`<div class="back-link">‹ ${esc(t('Back to feed'))}</div>`)).onclick = () => history.back();
+  wrap.appendChild(h(`<div class="toprow"><h2>${esc(t('New capture'))}<small>${esc(t('Photo & short video · location attached automatically'))}</small></h2></div>`));
 
   const vf = h(`
     <div class="viewfinder">
       <div class="grid3"></div>
-      <div class="placeholder">Upload a photo or a short clip (≤ 15s).<br>Your location is auto-tagged.</div>
-      <div class="vf-loc">${ICONS.pin.replace('currentColor', '#fff')}<span class="loc-text">Locating…</span></div>
+      <div class="placeholder">${esc(t('Upload a photo or a short clip (≤ 15s).'))}<br>${esc(t('Your location is auto-tagged.'))}</div>
+      <div class="vf-loc">${ICONS.pin.replace('currentColor', '#fff')}<span class="loc-text">${esc(t('Locating…'))}</span></div>
     </div>`);
   wrap.appendChild(vf);
 
   const modes = h(`<div class="modes">
-      <span class="mode on" data-m="photo">Photo</span>
-      <span class="mode" data-m="video">Video ≤ 15s</span></div>`);
+      <span class="mode on" data-m="photo">${esc(t('Photo'))}</span>
+      <span class="mode" data-m="video">${esc(t('Video ≤ 15s'))}</span></div>`);
   modes.querySelectorAll('.mode').forEach((m) => m.onclick = () => {
     modes.querySelectorAll('.mode').forEach((x) => x.classList.remove('on'));
     m.classList.add('on'); draft.mode = m.dataset.m;
@@ -1064,8 +1421,8 @@ function captureView() {
   wrap.appendChild(modes);
 
   const up = h(`<div class="upbtns">
-      <label class="upbtn">${ICONS.camera}Take a photo<input type="file" accept="image/*" capture="environment" hidden></label>
-      <label class="upbtn">${ICONS.video}Take a video<input type="file" accept="video/*" capture="environment" hidden></label>
+      <label class="upbtn">${ICONS.camera}${esc(t('Take a photo'))}<input type="file" accept="image/*" capture="environment" hidden></label>
+      <label class="upbtn">${ICONS.video}${esc(t('Take a video'))}<input type="file" accept="video/*" capture="environment" hidden></label>
     </div>`);
   up.querySelectorAll('input').forEach((inp) => inp.onchange = (e) => onFile(e.target.files[0]));
   wrap.appendChild(up);
@@ -1074,8 +1431,8 @@ function captureView() {
 
   // stream picker
   const pick = h(`<div class="stream-pick">
-      <button class="care on" data-s="care"><b>△ Needs Care</b><span>Something to fix or flag</span></button>
-      <button class="good" data-s="good"><b>✦ The Good</b><span>Something worth savouring</span></button>
+      <button class="care on" data-s="care"><b>△ ${esc(t('Needs Care'))}</b><span>${esc(t('Something to fix or flag'))}</span></button>
+      <button class="good" data-s="good"><b>✦ ${esc(t('The Good'))}</b><span>${esc(t('Something worth savouring'))}</span></button>
     </div>`);
   pick.querySelectorAll('button').forEach((b) => b.onclick = () => {
     pick.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
@@ -1085,10 +1442,10 @@ function captureView() {
 
   const form = h(`
     <div class="card">
-      <div class="field"><label>Title</label><input name="title" placeholder="What did you notice?"></div>
-      <div class="field"><label>A little more (optional)</label><input name="body" placeholder="Add context for your neighbours"></div>
+      <div class="field"><label>${esc(t('Title'))}</label><input name="title" placeholder="${esc(t('What did you notice?'))}"></div>
+      <div class="field"><label>${esc(t('A little more (optional)'))}</label><textarea name="body" rows="2" placeholder="${esc(t('Add context for your neighbours'))}"></textarea></div>
       <div class="ai-preview hidden">${ICONS.spark}<div class="ai-text"></div></div>
-      <button class="btn primary" disabled>Post to the block</button>
+      <button class="btn primary" disabled>${esc(t('Post to the block'))}</button>
     </div>`);
   const titleInput = form.querySelector('[name=title]');
   const bodyInput = form.querySelector('[name=body]');
@@ -1101,20 +1458,41 @@ function captureView() {
   titleInput.oninput = refreshSubmit;
   wrap.appendChild(form);
 
+  // Culturally-iconic style chips — tapping one (re)writes the title + body in that voice.
+  const styleHost = h('<div class="style-host"></div>');
+  aiBox.after(styleHost);
+  mountStyleComposer(styleHost, {
+    getFile: () => draft.file,
+    getNote: () => bodyInput.value, // reuse whatever context the neighbour already typed
+    stream: () => draft.stream,     // read live — the neighbour may switch Care/Good after mount
+    busy: (on, label) => {
+      if (!on) return;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `✍️ <b>${tf('Writing as {label}…', { label: esc(label) })}</b>`;
+    },
+    fill: ({ title, description, label }) => {
+      if (title) titleInput.value = title;       // styled picks intentionally replace the fields
+      if (description) bodyInput.value = description;
+      aiBox.classList.remove('hidden');
+      aiText.innerHTML = `✍️ <b>${esc(label)}</b><p>${esc(t('Edit anything before you post.'))}</p>`;
+      refreshSubmit();
+    },
+  });
+
   // Ask the vision model to suggest a title + description from the photo. Fills only
   // empty fields (never clobbers what the neighbour typed) and stays fully editable.
   let describeSeq = 0;
   async function autoDescribe(file) {
     const seq = ++describeSeq;
     aiBox.classList.remove('hidden');
-    aiText.innerHTML = '<b>Reading your photo…</b>';
+    aiText.innerHTML = `<b>${esc(t('Reading your photo…'))}</b>`;
     try {
-      const { title, description } = await api.describeImage(file, draft.stream);
+      const { title, description } = await api.describeImage(file, draft.stream, currentLang());
       if (seq !== describeSeq) return; // a newer photo superseded this one
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !bodyInput.value.trim()) bodyInput.value = description;
       refreshSubmit();
-      aiText.innerHTML = '<b>Suggested from your photo</b><p>Edit anything before you post.</p>';
+      aiText.innerHTML = `<b>${esc(t('Suggested from your photo'))}</b><p>${esc(t('Edit anything before you post.'))}</p>`;
     } catch {
       if (seq === describeSeq) aiBox.classList.add('hidden'); // silent fall back to manual
     }
@@ -1147,7 +1525,7 @@ function captureView() {
   const onCoords = async (lat, lng) => {
     draft.coords = { lat, lng };
     verifyPhotoGeo(draft, geoEl, refreshSubmit); // recheck now that we know where we are
-    showLoc('Locating…');
+    showLoc(t('Locating…'));
     const geo = await reverseGeocode(lat, lng);
     draft.place = geo?.placeName || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     draft.neighborhood = geo?.neighborhood || null;
@@ -1157,11 +1535,11 @@ function captureView() {
       .then(({ user }) => { state.user = user; }).catch(() => {});
   };
   function requestLoc() {
-    if (!navigator.geolocation) { showLoc('Location unavailable on this device'); return; }
-    showLoc('Locating…');
+    if (!navigator.geolocation) { showLoc(t('Location unavailable on this device')); return; }
+    showLoc(t('Locating…'));
     navigator.geolocation.getCurrentPosition(
       (pos) => onCoords(pos.coords.latitude, pos.coords.longitude),
-      () => { draft.coords = null; refreshSubmit(); showLoc('Turn on location to post — tap to retry'); },
+      () => { draft.coords = null; refreshSubmit(); showLoc(t('Turn on location to post — tap to retry')); },
       { enableHighAccuracy: true, timeout: 6000 }
     );
   }
@@ -1169,7 +1547,7 @@ function captureView() {
   requestLoc();
 
   submit.onclick = async () => {
-    submit.disabled = true; submit.textContent = 'Posting…';
+    submit.disabled = true; submit.textContent = t('Posting…');
     try {
       let mediaUrl = null, mediaType = draft.mediaType;
       if (draft.file) {
@@ -1190,12 +1568,12 @@ function captureView() {
       const ai = form.querySelector('.ai-preview');
       ai.classList.remove('hidden');
       ai.querySelector('.ai-text').innerHTML =
-        `<b>AI routed this to: ${esc(ACTION_LABEL[post.ai.action] || post.ai.action)}</b><p>${esc(post.ai.summary || '')}</p>`;
-      toast('Posted to your block', 'ok');
+        `<b>${tf('AI routed this to: {action}', { action: esc(t(ACTION_LABEL[post.ai.action] || post.ai.action)) })}</b><p>${esc(post.ai.summary || '')}</p>`;
+      toast(t('Posted to your block'), 'ok');
       setTimeout(() => go(`post/${post.id}`), 700);
     } catch (e) {
       toast(e.message, 'err');
-      submit.disabled = false; submit.textContent = 'Post to the block';
+      submit.disabled = false; submit.textContent = t('Post to the block');
     }
   };
 
@@ -1212,16 +1590,19 @@ function postDetailView() {
   api.get(`/api/posts/${state.postId}`).then(({ post: p, comments }) => {
     slot.innerHTML = '';
     const g = p.stream === 'good';
+    const far = !canReveal(p); // gate photo + full text on proximity (owner/admin exempt)
 
-    const media = h(`<div class="detail-media ${p.mediaUrl ? '' : (g ? 'g' : 'c')}"></div>`);
-    if (p.mediaUrl) {
+    if (p.mediaUrl && !far) {
+      const media = h(`<div class="detail-media"></div>`);
       media.appendChild(p.mediaType === 'video'
         ? h(`<video src="${esc(p.mediaUrl)}" controls playsinline></video>`)
         : h(`<img src="${esc(p.mediaUrl)}" alt="">`));
-    } else {
+      slot.appendChild(media);
+    } else if (!far) {
+      const media = h(`<div class="detail-media ${g ? 'g' : 'c'}"></div>`);
       media.appendChild(h(`<span class="badge" style="position:absolute;bottom:10px;left:10px">${p.mediaType === 'video' ? '▶ Video' : '◎ Photo'}</span>`));
+      slot.appendChild(media);
     }
-    slot.appendChild(media);
     const dm = detailMap(p);
     if (dm) slot.appendChild(dm);
 
@@ -1229,17 +1610,21 @@ function postDetailView() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ The Good' : '△ Needs Care'}</span>
           ${p.ai?.tag ? `<span class="badge" style="background:var(--green-tint);color:var(--green)">${esc(p.ai.tag)}</span>` : ''}
-          ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(STATUS_LABEL[p.status])}</span>` : ''}
+          ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
         </div>
         <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${esc(p.title)}</h2>
         <div class="pmeta">📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · by ${esc(p.author?.name || 'Neighbour')} · ${timeAgo(p.createdAt)}</div>
-        ${p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : ''}
+        ${far
+          ? `<div class="modal-locked" style="margin-top:10px">🔒<div><b>${p.distanceM != null ? dist(p.distanceM) + ' away' : 'You’re not nearby'}</b>
+               <p>This message and its photo unlock when you’re within ${REVEAL_LABEL} of where it was posted.</p></div></div>`
+          : (p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : '')}
       </div>`);
     card.appendChild(reactionRow(p, card));
-    if (p.author?.id === state.user.id) {
-      const del = h(`<button class="rbtn" style="margin-top:10px;border-color:var(--care);color:var(--care)">🗑 Remove this post</button>`);
+    const isOwner = p.author?.id === state.user.id;
+    if (isOwner || state.user.isAdmin) {
+      const del = h(`<button class="rbtn" style="margin-top:10px;border-color:var(--care);color:var(--care)">🗑 ${isOwner ? 'Remove this post' : 'Delete post (admin)'}</button>`);
       del.onclick = async () => {
-        if (!confirm('Remove this post? This cannot be undone.')) return;
+        if (!confirm(isOwner ? 'Remove this post? This cannot be undone.' : 'Delete this neighbour’s post as admin? This cannot be undone.')) return;
         try { await api.del(`/api/posts/${p.id}`); toast('Post removed', 'ok'); go('near'); }
         catch (e) { toast(e.message, 'err'); }
       };
@@ -1278,8 +1663,8 @@ function postDetailView() {
 function actionLadder(p) {
   const owner = p.author?.id === state.user.id;
   const box = h(`<div class="card">
-      <h4 style="font-family:var(--display);margin-bottom:4px">AI action ladder</h4>
-      <p style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">Every issue stays coupled to a path to act. AI suggested: <strong>${esc(ACTION_LABEL[p.ai?.action] || '—')}</strong>.</p>
+      <h4 style="font-family:var(--display);margin-bottom:4px">${esc(t('AI action ladder'))}</h4>
+      <p style="font-size:12px;color:var(--ink-soft);margin-bottom:12px">${tf('Every issue stays coupled to a path to act. AI suggested: {action}.', { action: `<strong>${esc(p.ai?.action ? t(ACTION_LABEL[p.ai.action] || p.ai.action) : '—')}</strong>` })}</p>
       <div class="ladder"></div>
     </div>`);
   const ladder = box.querySelector('.ladder');

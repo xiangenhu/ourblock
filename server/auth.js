@@ -42,6 +42,13 @@ export function requireAuth(req, res, next) {
   next();
 }
 
+/** True when an email is on the admin/steward allowlist (TEACHER_EMAILS). Role is always
+ *  derived server-side from the verified user — never from a client-asserted flag. */
+export function isAdminEmail(email) {
+  const e = (email || '').trim().toLowerCase();
+  return !!e && config.teacherEmails.includes(e);
+}
+
 /**
  * Hard gate for Admin-only routes (deny by default — see _shared/roles.md).
  *

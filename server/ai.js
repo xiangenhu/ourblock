@@ -17,6 +17,7 @@
 
 import config from './config.js';
 import { callLLM } from './llm/gateway.js';
+import { getStyleDirective } from './ai-styles.js';
 
 const RULES = [
   // category, regex, default action, suggested agency
@@ -117,27 +118,59 @@ function capWords(str, max) {
   return words.slice(0, max).join(' ').replace(/[,;:.]+$/, '') + '…';
 }
 
-export async function composePost({ base64, mediaType, note, stream = 'care', userId, lang } = {}) {
+/** Like capWords, but keeps line breaks — styled output (poems, verse) needs its lines. */
+function capWordsKeepLines(str, max) {
+  const lines = String(str || '').replace(/\r/g, '').trim().split('\n');
+  const out = [];
+  let count = 0;
+  for (const line of lines) {
+    const words = line.trim().split(/\s+/).filter(Boolean);
+    if (count + words.length <= max) { out.push(line.trim()); count += words.length; continue; }
+    out.push(words.slice(0, Math.max(0, max - count)).join(' '));
+    break;
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** System prompt for a styled rewrite — voice takes priority, but stays grounded in fact. */
+function styledSystem(directive) {
+  return 'You help a neighbour post a civic observation about their block. ' +
+    'From the photo and/or the note, write a title (max 10 words, no quotation marks) and a ' +
+    'description of 60 words or LESS. Write BOTH the title and the description in this voice: ' +
+    `${directive} ` +
+    'Stay grounded in what the photo and note actually show — evoke, but do not invent specific facts. ' +
+    'Return ONLY JSON: {"title":string,"description":string}.';
+}
+
+export async function composePost({ base64, mediaType, note, stream = 'care', userId, lang, style } = {}) {
   if (!config.has.llm()) return null;
   if (!base64 && !(note && note.trim())) return null; // nothing to work from
   try {
+    const directive = style ? getStyleDirective(lang, style) : null;
     const streamLine = stream === 'good'
       ? 'This is for "The Good" stream — something worth savouring.'
       : 'This is for "Needs Care" stream — something to fix or flag.';
     const user = note && note.trim() ? `${streamLine}\nThe neighbour wrote: "${note.trim()}"` : streamLine;
     const txt = await callLLM({
-      feature: 'compose',
+      feature: directive ? 'compose-style' : 'compose',
       userId,
       lang,
-      maxTokens: 220,
+      maxTokens: directive ? 360 : 220,
       json: true,
-      system: COMPOSE_SYSTEM,
+      system: directive ? styledSystem(directive) : COMPOSE_SYSTEM,
       user,
       image: base64 ? { base64, mediaType: mediaType || 'image/jpeg' } : undefined,
     });
     if (!txt) return null;
     const json = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
-    const title = capWords(String(json.title || '').replace(/^["']+|["']+$/g, ''), 10).slice(0, 120);
+    const rawTitle = String(json.title || '').replace(/^["']+|["']+$/g, '').replace(/\s*\n\s*/g, ' ');
+    if (directive) {
+      const title = capWordsKeepLines(rawTitle, 12).slice(0, 140);
+      const description = capWordsKeepLines(String(json.description || ''), 70).slice(0, 700);
+      if (!title && !description) return null;
+      return { title, description, style };
+    }
+    const title = capWords(rawTitle, 10).slice(0, 120);
     const description = capWords(String(json.description || ''), 50).slice(0, 400);
     if (!title && !description) return null;
     return { title, description };

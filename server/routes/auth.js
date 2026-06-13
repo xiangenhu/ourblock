@@ -14,7 +14,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { sign, setAuthCookie, clearAuthCookie, requireAuth } from '../auth.js';
+import { sign, setAuthCookie, clearAuthCookie, requireAuth, isAdminEmail } from '../auth.js';
 import { users } from '../store/repo.js';
 import store from '../store/gcs.js';
 import events from '../xapi/events.js';
@@ -38,6 +38,7 @@ function publicUser(u) {
     avatar: u.avatar,
     provider: u.provider || 'email',
     picture: u.picture || null,
+    isAdmin: isAdminEmail(u.email), // steward tier (TEACHER_EMAILS); drives admin-only UI
   };
 }
 
@@ -94,15 +95,22 @@ function startSession(res, user) {
 }
 
 /* ───────────────────────────── client config ──────────────────────────── */
-// Lets the SPA know whether to show the Google button and the gateway flows.
-router.get('/config', (_req, res) => {
+// Lets the SPA know auth flows + which map provider to use. `country` is a best-effort
+// hint from edge/CDN geo headers (empty in dev); the client also probes Google directly.
+router.get('/config', (req, res) => {
+  const country = (
+    req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] ||
+    req.headers['x-appengine-country'] || req.headers['x-country-code'] || ''
+  ).toString().toUpperCase();
   res.json({
     googleEnabled: oauthGateway.enabled,
     gatewayEnabled: oauthGateway.enabled,
     gatewayUrl: oauthGateway.url,
-    // Browser Maps key (referrer-restricted, public by design). Empty → the SPA
-    // shows a "map unavailable" placeholder instead of the live map.
-    mapsApiKey: config.maps.apiKey,
+    // Maps: provider selection happens client-side (browser location + this hint).
+    mapProvider: config.maps.provider,   // auto | google | amap | leaflet
+    mapsApiKey: config.maps.apiKey,       // Google JS key (referrer-restricted, public)
+    amapKey: config.maps.amapKey,         // 高德 JS key (domain-restricted, public)
+    country,                              // e.g. "CN" → prefer Amap; edge geo-IP hint
   });
 });
 

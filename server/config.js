@@ -85,9 +85,19 @@ const llm = {
   vendors: VENDORS,
 };
 
-// ── Google Maps (browser SDK + Geocoding; one referrer-restricted public key) ─
+// ── Maps (hybrid: Google globally, 高德/Amap in China, Leaflet as fallback) ────
+// provider 'auto' (default): the browser picks based on its own location — Amap when it's
+// in mainland China (where Google Maps JS is unreachable), Google elsewhere, and self-hosted
+// Leaflet (tiles proxied through routes/maps.js) if neither loads. Force one with
+// MAP_PROVIDER=google|amap|leaflet. Reverse geocoding always goes through the server, so the
+// browser never needs to reach OSM/Nominatim directly either.
 const maps = {
-  apiKey: env.MAPS_API_KEY || '',
+  provider: (env.MAP_PROVIDER || 'auto').toLowerCase(), // auto | google | amap | leaflet
+  apiKey: env.MAPS_API_KEY || '',                       // Google JS key (used when reachable)
+  amapKey: env.AMAP_KEY || '',                          // 高德 web JS key (domain-restricted in the Amap console)
+  tileUrl: env.MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  geocodeUrl: env.MAP_GEOCODE_URL || 'https://nominatim.openstreetmap.org/reverse',
+  userAgent: env.MAP_USER_AGENT || 'OurBlock/1.0 (civic wellbeing app)',
 };
 
 // ── Misc ─────────────────────────────────────────────────────────────────────
@@ -133,7 +143,7 @@ config.has = {
   gcs: () => !!gcs.bucket,
   llm: () => !!(llm.vendors[llm.vendor] && llm.vendors[llm.vendor].apiKey),
   lrs: () => !!(lrs.endpoint && lrs.username && lrs.password),
-  maps: () => !!maps.apiKey,
+  maps: () => !!maps.tileUrl, // always on — tiles are proxied through our own server
 };
 
 config.bool = bool;
