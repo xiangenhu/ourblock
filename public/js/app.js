@@ -649,7 +649,7 @@ async function renderAnonPost(id) {
   app.innerHTML = '';
   const wrap = h(`<div class="landing"></div>`);
   wrap.appendChild(anonTopBar());
-  const view = h(`<section class="anon-post"><a class="back-link" data-back>‹ Back to explore</a><div class="slot"><div class="spinner"></div></div></section>`);
+  const view = h(`<section class="anon-post"><a class="back-link" data-back>‹ ${esc(t('Back to explore'))}</a><div class="slot"><div class="spinner"></div></div></section>`);
   wrap.appendChild(view);
   app.appendChild(wrap);
   view.querySelector('[data-back]').onclick = () => go('');
@@ -658,7 +658,7 @@ async function renderAnonPost(id) {
   if (String(id).startsWith('sample-')) {
     const p = (await getSamples()).find((s) => s.id === id);
     slot.innerHTML = '';
-    slot.appendChild(p ? anonPostCard(p, { sample: true }) : h(`<div class="empty"><b>Not found</b></div>`));
+    slot.appendChild(p ? anonPostCard(p, { sample: true }) : h(`<div class="empty"><b>${esc(t('Not found'))}</b></div>`));
     return;
   }
   try {
@@ -666,7 +666,7 @@ async function renderAnonPost(id) {
     slot.innerHTML = '';
     slot.appendChild(anonPostCard(p, { comments }));
   } catch (err) {
-    slot.innerHTML = `<div class="empty"><b>Couldn't load this post</b>${esc(err.message)}</div>`;
+    slot.innerHTML = `<div class="empty"><b>${esc(t("Couldn't load this post"))}</b>${esc(err.message)}</div>`;
   }
 }
 
@@ -679,22 +679,22 @@ function anonPostCard(p, { sample, comments } = {}) {
   const dm = detailMap(p);
   if (dm) box.appendChild(dm);
   box.appendChild(h(`<div class="card" style="margin-top:14px">
-      <div><span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ The Good' : '△ Needs Care'}</span>${sample ? ' <span class="sample-tag">sample</span>' : ''}</div>
+      <div><span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>${sample ? ` <span class="sample-tag">${esc(t('sample'))}</span>` : ''}</div>
       <h2 style="font-family:var(--display);font-size:22px;margin:8px 0 6px">${esc(p.title)}</h2>
-      <div class="pmeta">📍 ${esc(p.placeName || 'Nearby')} · ${esc(p.author?.name || 'A neighbour')} · ${timeAgo(p.createdAt)}</div>
+      <div class="pmeta">📍 ${esc(p.placeName || t('Nearby'))} · ${esc(p.author?.name || t('A neighbour'))} · ${timeAgo(p.createdAt)}</div>
       ${p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : ''}
     </div>`));
 
-  const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">Neighbour replies${comments ? ` (${comments.length})` : ''}</h4></div>`);
+  const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">${comments ? tf('Neighbour replies ({n})', { n: comments.length }) : esc(t('Neighbour replies'))}</h4></div>`);
   if (sample) {
-    cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">This is a sample showing how Our Block works. Log in to join your real block.</p>`));
+    cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">${esc(t('This is a sample showing how Our Block works. Log in to join your real block.'))}</p>`));
   } else {
     (comments || []).forEach((c) => cbox.appendChild(h(`
       <div class="comment"><div class="av">${esc(c.avatar || '·')}</div>
         <div><b>${esc(c.author)}</b> <span style="color:var(--ink-soft);font-size:11px">· ${timeAgo(c.createdAt)}</span>
         <p>${esc(c.body)}</p></div></div>`)));
-    if (!comments || !comments.length) cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">No replies yet.</p>`));
-    const prompt = h(`<button class="btn primary" style="margin-top:10px;width:auto;padding:10px 16px">Log in to reply</button>`);
+    if (!comments || !comments.length) cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">${esc(t('No replies yet.'))}</p>`));
+    const prompt = h(`<button class="btn primary" style="margin-top:10px;width:auto;padding:10px 16px">${esc(t('Log in to reply'))}</button>`);
     prompt.onclick = () => go('login');
     cbox.appendChild(prompt);
   }
@@ -799,19 +799,19 @@ function openAccount() {
     <div class="modal">
       <div class="modal-head">
         <div class="av" style="width:38px;height:38px;border-radius:99px;display:grid;place-items:center;background:linear-gradient(135deg,var(--good),#D98748);color:#3a2a10;font-family:var(--display);font-weight:700">${esc(u.avatar || '·')}</div>
-        <div><b style="font-family:var(--display);font-size:15px">${esc(u.name)}</b><div style="font-size:11.5px;color:var(--ink-soft)">${esc(u.email)} · ${isGoogle ? 'Google account' : 'Email account'}</div></div>
-        <button class="modal-x" aria-label="Close">✕</button>
+        <div><b style="font-family:var(--display);font-size:15px">${esc(u.name)}</b><div style="font-size:11.5px;color:var(--ink-soft)">${esc(u.email)} · ${isGoogle ? esc(t('Google account')) : esc(t('Email account'))}</div></div>
+        <button class="modal-x" aria-label="${esc(t('Close'))}">✕</button>
       </div>
       <div class="modal-body">
         ${isGoogle ? `
-          <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.5">You're signed in with Google. Manage your password and security in your Google account.</p>`
+          <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.5">${esc(t("You're signed in with Google. Manage your password and security in your Google account."))}</p>`
         : `
-          <h4 style="font-family:var(--display);font-size:13px;margin-bottom:10px">Change password</h4>
+          <h4 style="font-family:var(--display);font-size:13px;margin-bottom:10px">${esc(t('Change password'))}</h4>
           <div class="err-slot"></div>
           <form class="acct-form">
-            <div class="field"><label>Current password</label><input name="currentPassword" type="password" required></div>
-            <div class="field"><label>New password</label><input name="newPassword" type="password" placeholder="at least 6 characters" required></div>
-            <button class="btn primary" type="submit">Update password</button>
+            <div class="field"><label>${esc(t('Current password'))}</label><input name="currentPassword" type="password" required></div>
+            <div class="field"><label>${esc(t('New password'))}</label><input name="newPassword" type="password" placeholder="${esc(t('at least 6 characters'))}" required></div>
+            <button class="btn primary" type="submit">${esc(t('Update password'))}</button>
           </form>`}
       </div>
     </div>`);
@@ -827,7 +827,7 @@ function openAccount() {
     modal.querySelector('.err-slot').innerHTML = '';
     try {
       await api.post('/api/auth/change-password', Object.fromEntries(new FormData(form)));
-      toast('Password changed', 'ok'); close();
+      toast(t('Password changed'), 'ok'); close();
     } catch (err) {
       modal.querySelector('.err-slot').innerHTML = `<div class="auth-err">${esc(err.message)}</div>`;
       btn.disabled = false;
@@ -1633,24 +1633,24 @@ function postDetailView() {
 
     const card = h(`<div class="card" style="margin-top:14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ The Good' : '△ Needs Care'}</span>
+          <span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>
           ${p.ai?.tag ? `<span class="badge" style="background:var(--green-tint);color:var(--green)">${esc(p.ai.tag)}</span>` : ''}
           ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
         </div>
         <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${esc(p.title)}</h2>
-        <div class="pmeta">📍 ${esc(p.placeName || 'Nearby')}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · by ${esc(p.author?.name || 'Neighbour')} · ${timeAgo(p.createdAt)}</div>
+        <div class="pmeta">📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })} · ${timeAgo(p.createdAt)}</div>
         ${far
-          ? `<div class="modal-locked" style="margin-top:10px">🔒<div><b>${p.distanceM != null ? dist(p.distanceM) + ' away' : 'You’re not nearby'}</b>
-               <p>This message and its photo unlock when you’re within ${REVEAL_LABEL} of where it was posted.</p></div></div>`
+          ? `<div class="modal-locked" style="margin-top:10px">🔒<div><b>${p.distanceM != null ? esc(tf('{d} away', { d: dist(p.distanceM) })) : esc(t('You’re not nearby'))}</b>
+               <p>${tf('This message and its photo unlock when you’re within {radius} of where it was posted.', { radius: REVEAL_LABEL })}</p></div></div>`
           : (p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : '')}
       </div>`);
     card.appendChild(reactionRow(p, card));
     const isOwner = p.author?.id === state.user.id;
     if (isOwner || state.user.isAdmin) {
-      const del = h(`<button class="rbtn" style="margin-top:10px;border-color:var(--care);color:var(--care)">🗑 ${isOwner ? 'Remove this post' : 'Delete post (admin)'}</button>`);
+      const del = h(`<button class="rbtn" style="margin-top:10px;border-color:var(--care);color:var(--care)">🗑 ${isOwner ? esc(t('Remove this post')) : esc(t('Delete post (admin)'))}</button>`);
       del.onclick = async () => {
-        if (!confirm(isOwner ? 'Remove this post? This cannot be undone.' : 'Delete this neighbour’s post as admin? This cannot be undone.')) return;
-        try { await api.del(`/api/posts/${p.id}`); toast('Post removed', 'ok'); go('near'); }
+        if (!confirm(isOwner ? t('Remove this post? This cannot be undone.') : t('Delete this neighbour’s post as admin? This cannot be undone.'))) return;
+        try { await api.del(`/api/posts/${p.id}`); toast(t('Post removed'), 'ok'); go('near'); }
         catch (e) { toast(e.message, 'err'); }
       };
       card.appendChild(del);
@@ -1661,12 +1661,12 @@ function postDetailView() {
     if (p.stream === 'care') slot.appendChild(actionLadder(p));
 
     // comments
-    const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">Neighbour replies (${comments.length})</h4></div>`);
+    const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">${tf('Neighbour replies ({n})', { n: comments.length })}</h4></div>`);
     comments.forEach((c) => cbox.appendChild(h(`
       <div class="comment"><div class="av">${esc(c.avatar || '·')}</div>
         <div><b>${esc(c.author)}</b> <span style="color:var(--ink-soft);font-size:11px">· ${timeAgo(c.createdAt)}</span>
         <p>${esc(c.body)}</p></div></div>`)));
-    const cform = h(`<form class="comment-form"><input placeholder="Add an encouraging reply…" maxlength="280"><button class="btn primary" style="width:auto;padding:10px 16px">Reply</button></form>`);
+    const cform = h(`<form class="comment-form"><input placeholder="${esc(t('Add an encouraging reply…'))}" maxlength="280"><button class="btn primary" style="width:auto;padding:10px 16px">${esc(t('Reply'))}</button></form>`);
     cform.onsubmit = async (e) => {
       e.preventDefault();
       const input = cform.querySelector('input');
@@ -1679,7 +1679,7 @@ function postDetailView() {
     cbox.appendChild(cform);
     slot.appendChild(cbox);
   }).catch((err) => {
-    slot.innerHTML = `<div class="empty"><b>Couldn't load this post</b>${esc(err.message)}</div>`;
+    slot.innerHTML = `<div class="empty"><b>${esc(t("Couldn't load this post"))}</b>${esc(err.message)}</div>`;
   });
 
   return wrap;
@@ -1699,8 +1699,8 @@ function actionLadder(p) {
     .forEach(([key, k, label, sub]) => {
       const on = p.ai?.action === key;
       const rung = h(`<div class="rung ${on ? 'hot' : ''}" style="${on ? 'background:var(--green-tint);border-color:var(--green-2)' : ''}">
-        <span class="k">${k}</span><div><div>${label}</div><div style="font-size:10.5px;color:var(--ink-soft);font-weight:500">${sub}</div></div>
-        ${on ? '<b>AI pick</b>' : ''}</div>`);
+        <span class="k">${k}</span><div><div>${esc(t(label))}</div><div style="font-size:10.5px;color:var(--ink-soft);font-weight:500">${esc(t(sub))}</div></div>
+        ${on ? `<b>${esc(t('AI pick'))}</b>` : ''}</div>`);
       ladder.appendChild(rung);
     });
 
@@ -1715,9 +1715,9 @@ function actionLadder(p) {
       b.onclick = () => advance(p.id, action);
       actions.appendChild(b);
     };
-    if (p.ai?.action === 'city' && ['open', 'rallying'].includes(p.status)) add('↗ Send report to city', 'send_report');
-    if (['routed', 'rallying', 'open'].includes(p.status)) add('🛠 Mark in progress', 'in_progress');
-    add('✓ Mark resolved', 'resolve');
+    if (p.ai?.action === 'city' && ['open', 'rallying'].includes(p.status)) add('↗ ' + t('Send report to city'), 'send_report');
+    if (['routed', 'rallying', 'open'].includes(p.status)) add('🛠 ' + t('Mark in progress'), 'in_progress');
+    add('✓ ' + t('Mark resolved'), 'resolve');
     box.appendChild(actions);
   }
   return box;
@@ -1726,7 +1726,7 @@ function actionLadder(p) {
 /* --------------------------------------------------------- impact / community */
 function impactView() {
   const wrap = h(`<div style="max-width:780px;margin:0 auto"></div>`);
-  wrap.appendChild(h(`<div class="toprow"><h2>My Impact<small>Intrapersonal self-efficacy — effort made visible</small></h2></div>`));
+  wrap.appendChild(h(`<div class="toprow"><h2>${esc(t('My Impact'))}<small>${esc(t('Intrapersonal self-efficacy — effort made visible'))}</small></h2></div>`));
   const slot = h(`<div><div class="spinner"></div></div>`);
   wrap.appendChild(slot);
 
@@ -1734,51 +1734,51 @@ function impactView() {
     .then(([s, mine]) => {
       slot.innerHTML = '';
       slot.appendChild(h(`<div class="statgrid">
-          <div class="bigstat"><div class="n">${s.acts}</div><div class="l">acts of care this season</div></div>
-          <div class="bigstat good"><div class="n">${s.captured}</div><div class="l">observations you captured</div></div>
-          <div class="bigstat care"><div class="n">${s.resolved}</div><div class="l">items you helped resolve</div></div>
-          <div class="bigstat"><div class="n">${s.cheersReceived}</div><div class="l">cheers your posts received</div></div>
+          <div class="bigstat"><div class="n">${s.acts}</div><div class="l">${esc(t('acts of care this season'))}</div></div>
+          <div class="bigstat good"><div class="n">${s.captured}</div><div class="l">${esc(t('observations you captured'))}</div></div>
+          <div class="bigstat care"><div class="n">${s.resolved}</div><div class="l">${esc(t('items you helped resolve'))}</div></div>
+          <div class="bigstat"><div class="n">${s.cheersReceived}</div><div class="l">${esc(t('cheers your posts received'))}</div></div>
         </div>`));
       slot.appendChild(h(`<div class="card" style="margin-top:16px">
-          <h4 style="font-family:var(--display);margin-bottom:8px">Season goal</h4>
-          <div class="stat"><span class="n">${s.acts}</span><span class="l">of ${s.goal} acts</span></div>
+          <h4 style="font-family:var(--display);margin-bottom:8px">${esc(t('Season goal'))}</h4>
+          <div class="stat"><span class="n">${s.acts}</span><span class="l">${tf('of {goal} acts', { goal: s.goal })}</span></div>
           <div class="bar"><i style="width:${Math.round(s.progress * 100)}%"></i></div>
         </div>`));
-      const list = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:10px">Your captures</h4></div>`);
+      const list = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:10px">${esc(t('Your captures'))}</h4></div>`);
       const feed = h(`<div class="feed"></div>`);
-      if (!mine.posts.length) feed.appendChild(h(`<div class="empty"><b>Nothing yet</b>Capture the first thing on your block.</div>`));
+      if (!mine.posts.length) feed.appendChild(h(`<div class="empty"><b>${esc(t('Nothing yet'))}</b>${esc(t('Capture the first thing on your block.'))}</div>`));
       mine.posts.forEach((p) => feed.appendChild(postCard(p)));
       list.appendChild(feed);
       slot.appendChild(list);
-    }).catch((e) => { slot.innerHTML = `<div class="empty"><b>Couldn't load</b>${esc(e.message)}</div>`; });
+    }).catch((e) => { slot.innerHTML = `<div class="empty"><b>${esc(t("Couldn't load"))}</b>${esc(e.message)}</div>`; });
   return wrap;
 }
 
 function communityView() {
   const wrap = h(`<div style="max-width:820px;margin:0 auto"></div>`);
-  wrap.appendChild(h(`<div class="toprow"><h2>Community<small>Collective efficacy — what the block does together</small></h2></div>`));
+  wrap.appendChild(h(`<div class="toprow"><h2>${esc(t('Community'))}<small>${esc(t('Collective efficacy — what the block does together'))}</small></h2></div>`));
   const slot = h(`<div><div class="spinner"></div></div>`);
   wrap.appendChild(slot);
 
   api.get('/api/stats/community').then((c) => {
     slot.innerHTML = '';
     slot.appendChild(h(`<div class="statgrid">
-        <div class="bigstat"><div class="n">${c.acts}</div><div class="l">acts across ${c.neighbours} neighbours</div></div>
-        <div class="bigstat good"><div class="n">${c.good}</div><div class="l">good things noticed</div></div>
-        <div class="bigstat care"><div class="n">${c.care}</div><div class="l">care items flagged</div></div>
-        <div class="bigstat"><div class="n">${c.resolved}</div><div class="l">issues closed together</div></div>
+        <div class="bigstat"><div class="n">${c.acts}</div><div class="l">${tf('acts across {n} neighbours', { n: c.neighbours })}</div></div>
+        <div class="bigstat good"><div class="n">${c.good}</div><div class="l">${esc(t('good things noticed'))}</div></div>
+        <div class="bigstat care"><div class="n">${c.care}</div><div class="l">${esc(t('care items flagged'))}</div></div>
+        <div class="bigstat"><div class="n">${c.resolved}</div><div class="l">${esc(t('issues closed together'))}</div></div>
       </div>`));
     slot.appendChild(h(`<div class="card" style="margin-top:16px;background:linear-gradient(150deg,var(--green-2),var(--green));color:#fff;border:0">
-        <div style="font-family:var(--display);font-weight:800;font-size:18px">↑ ${c.changePct}% more acts than last month</div>
-        <p style="color:#CFE0D7;font-size:13px;margin-top:4px">When neighbours can see shared effort, they do more of it. That's collective efficacy (Sampson et al., 1997).</p>
+        <div style="font-family:var(--display);font-weight:800;font-size:18px">${tf('↑ {pct}% more acts than last month', { pct: c.changePct })}</div>
+        <p style="color:#CFE0D7;font-size:13px;margin-top:4px">${esc(t("When neighbours can see shared effort, they do more of it. That's collective efficacy (Sampson et al., 1997)."))}</p>
       </div>`));
-    const board = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:10px">Most active neighbours</h4></div>`);
+    const board = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:10px">${esc(t('Most active neighbours'))}</h4></div>`);
     c.leaders.forEach((l, i) => board.appendChild(h(`
       <div class="rung" style="margin-bottom:7px"><span class="k">${i + 1}</span>
         <span>${esc(l.name_cjk ? l.name_cjk + ' · ' : '')}${esc(l.name)}</span>
-        <b style="margin-left:auto">${l.posts} posts</b></div>`)));
+        <b style="margin-left:auto">${tf('{n} posts', { n: l.posts })}</b></div>`)));
     slot.appendChild(board);
-  }).catch((e) => { slot.innerHTML = `<div class="empty"><b>Couldn't load</b>${esc(e.message)}</div>`; });
+  }).catch((e) => { slot.innerHTML = `<div class="empty"><b>${esc(t("Couldn't load"))}</b>${esc(e.message)}</div>`; });
   return wrap;
 }
 
