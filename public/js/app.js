@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { h, esc, timeAgo, dist, toast, ICONS } from './ui.js';
 import { exifGps, haversine } from './exif.js';
+import { t, tf, initI18n, setUiLang, currentUiLang, UI_LANGS_META } from './i18n.js';
 
 const app = document.getElementById('app');
 
@@ -37,12 +38,25 @@ async function boot() {
   try {
     state.config = await api.get('/api/auth/config');
   } catch { /* gateway config unavailable — fall back to defaults */ }
+  // Preload the UI dictionary before the first render. The default language follows the
+  // viewer's LOCATION (defaultLang(): China detection → geo-IP → locale), overridable by
+  // ?lang=, a saved choice, or the in-app switcher.
+  try { await initI18n({ hint: defaultLang() }); } catch { /* fall back to English */ }
   try {
     const { user } = await api.get('/api/auth/me');
     state.user = user;
   } catch { /* offline / first run */ }
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
+}
+
+/** A compact UI-language <select>; switching re-renders the whole app in the new language. */
+function langSwitcher(cls = '') {
+  const sel = h(`<select class="lang-switch ${cls}" aria-label="${esc(t('Language'))}"></select>`);
+  UI_LANGS_META.forEach((l) => sel.appendChild(h(`<option value="${l.code}">${esc(l.label)}</option>`)));
+  sel.value = currentUiLang();
+  sel.onchange = async () => { await setUiLang(sel.value); render(); };
+  return sel;
 }
 
 function routeFromHash() {
@@ -105,63 +119,63 @@ function renderAuth() {
     const forms = {
       login: `
         <form class="auth-form" data-act="login">
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <div class="field"><label>Password</label><input name="password" type="password" placeholder="••••••" required></div>
-          <button class="btn primary" type="submit">Sign in</button>
+          <div class="field"><label>${esc(t('Email'))}</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <div class="field"><label>${esc(t('Password'))}</label><input name="password" type="password" placeholder="••••••" required></div>
+          <button class="btn primary" type="submit">${esc(t('Sign in'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="forgot">Forgot password?</a> · New here? <a data-sw="register">Create an account</a></div>`,
+        <div class="auth-switch"><a data-sw="forgot">${esc(t('Forgot password?'))}</a> · ${esc(t('New here?'))} <a data-sw="register">${esc(t('Create an account'))}</a></div>`,
       register: `
         <form class="auth-form" data-act="register">
-          <div class="field"><label>Name</label><input name="name" placeholder="e.g. Ling W." required></div>
-          <div class="field"><label>Name in 中文 (optional)</label><input name="nameCjk" placeholder="玲"></div>
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <div class="field"><label>Password</label><input name="password" type="password" placeholder="at least 6 characters" required></div>
-          <button class="btn primary" type="submit">Create account</button>
+          <div class="field"><label>${esc(t('Name'))}</label><input name="name" placeholder="${esc(t('e.g. Ling W.'))}" required></div>
+          <div class="field"><label>${esc(t('Name in 中文 (optional)'))}</label><input name="nameCjk" placeholder="玲"></div>
+          <div class="field"><label>${esc(t('Email'))}</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <div class="field"><label>${esc(t('Password'))}</label><input name="password" type="password" placeholder="${esc(t('at least 6 characters'))}" required></div>
+          <button class="btn primary" type="submit">${esc(t('Create account'))}</button>
         </form>
-        <div class="auth-switch">Have an account? <a data-sw="login">Sign in</a></div>`,
+        <div class="auth-switch">${esc(t('Have an account?'))} <a data-sw="login">${esc(t('Sign in'))}</a></div>`,
       verify: `
-        <p class="auth-note">We emailed a 6-digit code to <b>${esc(pendingEmail)}</b>. Enter it to finish.</p>
+        <p class="auth-note">${tf('We emailed a 6-digit code to {email}. Enter it to finish.', { email: `<b>${esc(pendingEmail)}</b>` })}</p>
         <form class="auth-form" data-act="verify">
-          <div class="field"><label>Verification code</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
-          <button class="btn primary" type="submit">Verify &amp; continue</button>
+          <div class="field"><label>${esc(t('Verification code'))}</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
+          <button class="btn primary" type="submit">${esc(t('Verify & continue'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="resend">Resend code</a> · <a data-sw="login">Back to sign in</a></div>`,
+        <div class="auth-switch"><a data-sw="resend">${esc(t('Resend code'))}</a> · <a data-sw="login">${esc(t('Back to sign in'))}</a></div>`,
       forgot: `
-        <p class="auth-note">Enter your email and we'll send a reset code.</p>
+        <p class="auth-note">${esc(t("Enter your email and we'll send a reset code."))}</p>
         <form class="auth-form" data-act="forgot">
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@block.org" required></div>
-          <button class="btn primary" type="submit">Send reset code</button>
+          <div class="field"><label>${esc(t('Email'))}</label><input name="email" type="email" placeholder="you@block.org" required></div>
+          <button class="btn primary" type="submit">${esc(t('Send reset code'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="login">Back to sign in</a></div>`,
+        <div class="auth-switch"><a data-sw="login">${esc(t('Back to sign in'))}</a></div>`,
       reset: `
-        <p class="auth-note">Enter the code sent to <b>${esc(pendingEmail)}</b> and your new password.</p>
+        <p class="auth-note">${tf('Enter the code sent to {email} and your new password.', { email: `<b>${esc(pendingEmail)}</b>` })}</p>
         <form class="auth-form" data-act="reset">
-          <div class="field"><label>Reset code</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
-          <div class="field"><label>New password</label><input name="newPassword" type="password" placeholder="at least 6 characters" required></div>
-          <button class="btn primary" type="submit">Update password</button>
+          <div class="field"><label>${esc(t('Reset code'))}</label><input name="code" inputmode="numeric" placeholder="123456" maxlength="6" required></div>
+          <div class="field"><label>${esc(t('New password'))}</label><input name="newPassword" type="password" placeholder="${esc(t('at least 6 characters'))}" required></div>
+          <button class="btn primary" type="submit">${esc(t('Update password'))}</button>
         </form>
-        <div class="auth-switch"><a data-sw="login">Back to sign in</a></div>`,
+        <div class="auth-switch"><a data-sw="login">${esc(t('Back to sign in'))}</a></div>`,
     };
 
     const titles = {
-      login: 'Your block, in good hands — together.',
-      register: 'Create your neighbour account.',
-      verify: 'Check your email.',
-      forgot: 'Reset your password.',
-      reset: 'Set a new password.',
+      login: t('Your block, in good hands — together.'),
+      register: t('Create your neighbour account.'),
+      verify: t('Check your email.'),
+      forgot: t('Reset your password.'),
+      reset: t('Set a new password.'),
     };
 
     const card = h(`
       <div class="auth-wrap"><div class="auth-card">
-        <a class="auth-back" data-back>‹ Back to explore</a>
+        <a class="auth-back" data-back>‹ ${esc(t('Back to explore'))}</a>
         <div class="brand cjk">优城美市<small>Our Block</small></div>
-        <div class="auth-tag">${titles[mode]}</div>
+        <div class="auth-tag">${esc(titles[mode])}</div>
         <div class="err-slot"></div>
-        ${showGoogle ? `<button class="btn google" data-google>${GOOGLE_G}<span>Continue with Google</span></button><div class="auth-divider"><span>or</span></div>` : ''}
+        ${showGoogle ? `<button class="btn google" data-google>${GOOGLE_G}<span>${esc(t('Continue with Google'))}</span></button><div class="auth-divider"><span>${esc(t('or'))}</span></div>` : ''}
         ${forms[mode]}
       </div></div>`);
 
-    if (oauthErr && mode === 'login') setErr(card, "Google sign-in didn't complete. Please try again.");
+    if (oauthErr && mode === 'login') setErr(card, t("Google sign-in didn't complete. Please try again."));
 
     card.querySelector('[data-back]')?.addEventListener('click', () => go(''));
 
@@ -196,24 +210,24 @@ function renderAuth() {
         if (act === 'login') {
           const data = await api.post('/api/auth/login', fd);
           api.saveToken(data.token); state.user = data.user;
-          toast(`Welcome, ${data.user.name.split(' ')[0]}`, 'ok'); go('near');
+          toast(tf('Welcome, {name}', { name: data.user.name.split(' ')[0] }), 'ok'); go('near');
         } else if (act === 'register') {
           const out = await api.post('/api/auth/register', fd);
           if (out.user) { api.saveToken(out.token); state.user = out.user; go('near'); return; } // local fallback
           pendingEmail = fd.email; mode = 'verify'; mount();
-          toast('Verification code sent', 'ok');
+          toast(t('Verification code sent'), 'ok');
         } else if (act === 'verify') {
           const data = await api.post('/api/auth/verify', { email: pendingEmail, code: fd.code });
           api.saveToken(data.token); state.user = data.user;
-          toast('Email verified — welcome!', 'ok'); go('near');
+          toast(t('Email verified — welcome!'), 'ok'); go('near');
         } else if (act === 'forgot') {
           await api.post('/api/auth/forgot-password', { email: fd.email });
           pendingEmail = fd.email; mode = 'reset'; mount();
-          toast('Reset code sent (if the email exists)', 'ok');
+          toast(t('Reset code sent (if the email exists)'), 'ok');
         } else if (act === 'reset') {
           await api.post('/api/auth/reset-password', { email: pendingEmail, code: fd.code, newPassword: fd.newPassword });
           mode = 'login'; mount();
-          toast('Password updated — sign in', 'ok');
+          toast(t('Password updated — sign in'), 'ok');
         }
       } catch (err) {
         setErr(card, err.message);
@@ -243,10 +257,13 @@ function anonTopBar() {
   const bar = h(`
     <header class="land-top">
       <div class="brand cjk" data-home>优城美市<small>Our Block</small></div>
-      <button class="btn primary land-login">Log in</button>
+      <div class="land-top-right">
+        <button class="btn primary land-login">${esc(t('Log in'))}</button>
+      </div>
     </header>`);
   bar.querySelector('[data-home]').onclick = () => go('');
   bar.querySelector('.land-login').onclick = () => go('login');
+  bar.querySelector('.land-top-right').prepend(langSwitcher('compact'));
   return bar;
 }
 
@@ -354,55 +371,97 @@ function landingMap(samples) {
 }
 
 /* ----------------------------------------------- AI writing-style composer */
-// The browser's language → primary subtag ("zh-CN" → "zh"), used to fetch the right
-// culturally-iconic style chips and to tell the model which language to write in.
-function uiLang() {
-  return (navigator.language || 'en').toLowerCase().split(/[-_]/)[0];
+// Languages we have style catalogs + gateway support for, with native labels for the picker.
+const STYLE_LANGS = [
+  { code: 'zh', label: '中文' }, { code: 'en', label: 'English' }, { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' }, { code: 'de', label: 'Deutsch' }, { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' }, { code: 'ja', label: '日本語' }, { code: 'ko', label: '한국어' },
+  { code: 'ru', label: 'Русский' }, { code: 'ar', label: 'العربية' }, { code: 'hi', label: 'हिन्दी' },
+];
+// Rough country → language for a location-based default (the geo-IP hint from /api/auth/config).
+const COUNTRY_LANG = {
+  CN: 'zh', TW: 'zh', HK: 'zh', MO: 'zh', SG: 'zh', JP: 'ja', KR: 'ko',
+  FR: 'fr', DE: 'de', AT: 'de', CH: 'de', IT: 'it', RU: 'ru', IN: 'hi',
+  ES: 'es', MX: 'es', AR: 'es', CO: 'es', CL: 'es', PE: 'es',
+  BR: 'pt', PT: 'pt', SA: 'ar', AE: 'ar', EG: 'ar', QA: 'ar',
+};
+const LANG_KEY = 'ob.lang';
+const supportedLang = (c) => STYLE_LANGS.some((l) => l.code === c);
+
+// The default writing language, derived from LOCATION first: China detection (the same signal
+// the map uses) → zh, then the edge geo-IP country, then the browser locale, else English.
+function defaultLang() {
+  if (browserInChina()) return 'zh';
+  const cc = (state.config && state.config.country || '').toUpperCase();
+  if (COUNTRY_LANG[cc]) return COUNTRY_LANG[cc];
+  const loc = (navigator.language || 'en').toLowerCase().split(/[-_]/)[0];
+  return supportedLang(loc) ? loc : 'en';
 }
 
-// Renders a row of culturally-iconic writing-style chips (鲁迅风格 / 古文 / 李白 … in Chinese,
-// Shakespeare / Hemingway … in English, etc.) and wires each to the LLM composer. Tapping a
-// chip rewrites the title + description from the photo and/or note in that voice. Styles come
-// from the server, localised to the browser's language; if none load, the row is silently
-// skipped (manual entry still works). `host` is where the row is appended.
-async function mountStyleComposer(host, { getFile, getNote, stream, fill, busy }) {
-  const lang = uiLang();
-  let styles = [];
-  try { ({ styles = [] } = await api.get(`/api/ai/styles?lang=${encodeURIComponent(lang)}`)); }
-  catch { return; }
-  if (!styles.length) return;
+// The active writing language: a saved user choice wins; otherwise the location default.
+function currentLang() {
+  try { const saved = localStorage.getItem(LANG_KEY); if (supportedLang(saved)) return saved; } catch { /* private mode */ }
+  const d = defaultLang();
+  return supportedLang(d) ? d : 'en';
+}
+function setLang(code) { try { localStorage.setItem(LANG_KEY, code); } catch { /* private mode */ } }
 
+// Renders a language picker + a row of culturally-iconic writing-style chips (鲁迅风格 / 古文 /
+// 李白 … in Chinese, Shakespeare / Hemingway … in English, etc.) and wires each to the LLM
+// composer. Tapping a chip rewrites the title + description from the photo and/or note in that
+// voice. The picker defaults to the location's language; changing it reloads the chips and is
+// remembered. `host` is where the row is appended.
+async function mountStyleComposer(host, { getFile, getNote, stream, fill, busy }) {
   const row = h(`<div class="style-row">
-      <span class="style-lead">${ICONS.spark}<b>Write it as…</b></span>
+      <div class="style-head">
+        <span class="style-lead">${ICONS.spark}<b>Write it as…</b></span>
+        <select class="style-lang" aria-label="Writing language"></select>
+      </div>
       <div class="style-chips"></div>
     </div>`);
+  const sel = row.querySelector('.style-lang');
   const chips = row.querySelector('.style-chips');
+  STYLE_LANGS.forEach((l) => sel.appendChild(h(`<option value="${l.code}">${esc(l.label)}</option>`)));
+
+  let lang = currentLang();
+  sel.value = lang;
   let seq = 0;
-  styles.forEach((s) => {
-    const chip = h(`<button type="button" class="style-chip" data-id="${esc(s.id)}"${s.hint ? ` title="${esc(s.hint)}"` : ''}>${esc(s.label)}</button>`);
-    chip.onclick = async () => {
-      const file = getFile();
-      const note = (getNote() || '').trim();
-      if (!file && !note) { toast('Add a photo or a note first', ''); return; }
-      const my = ++seq;
-      chips.querySelectorAll('.style-chip').forEach((c) => c.classList.toggle('on', c === chip));
-      chip.classList.add('busy');
-      busy?.(true, s.label);
-      try {
-        const streamNow = typeof stream === 'function' ? stream() : stream;
-        const { title, description } = await api.compose({ file, note, stream: streamNow, lang, style: s.id });
-        if (my !== seq) return; // a newer pick superseded this one
-        fill({ title, description, label: s.label });
-      } catch (e) {
-        toast(e.message || 'AI is unavailable right now', 'err');
-      } finally {
-        chip.classList.remove('busy');
-        busy?.(false);
-      }
-    };
-    chips.appendChild(chip);
-  });
+
+  async function loadChips(lng) {
+    chips.innerHTML = '<span class="style-loading">…</span>';
+    let styles = [];
+    try { ({ styles = [] } = await api.get(`/api/ai/styles?lang=${encodeURIComponent(lng)}`)); }
+    catch { chips.innerHTML = ''; return; }
+    chips.innerHTML = '';
+    styles.forEach((s) => {
+      const chip = h(`<button type="button" class="style-chip" data-id="${esc(s.id)}"${s.hint ? ` title="${esc(s.hint)}"` : ''}>${esc(s.label)}</button>`);
+      chip.onclick = async () => {
+        const file = getFile();
+        const note = (getNote() || '').trim();
+        if (!file && !note) { toast('Add a photo or a note first', ''); return; }
+        const my = ++seq;
+        chips.querySelectorAll('.style-chip').forEach((c) => c.classList.toggle('on', c === chip));
+        chip.classList.add('busy');
+        busy?.(true, s.label);
+        try {
+          const streamNow = typeof stream === 'function' ? stream() : stream;
+          const { title, description } = await api.compose({ file, note, stream: streamNow, lang: lng, style: s.id });
+          if (my !== seq) return; // a newer pick superseded this one
+          fill({ title, description, label: s.label });
+        } catch (e) {
+          toast(e.message || 'AI is unavailable right now', 'err');
+        } finally {
+          chip.classList.remove('busy');
+          busy?.(false);
+        }
+      };
+      chips.appendChild(chip);
+    });
+  }
+
+  sel.onchange = () => { lang = sel.value; setLang(lang); loadChips(lang); };
   host.appendChild(row);
+  loadChips(lang);
 }
 
 /* --------------------------------------------------- anonymous "share the good" */
@@ -494,7 +553,7 @@ function renderAnonShare() {
     aiBox.classList.remove('hidden');
     aiText.innerHTML = '<b>Thinking…</b>';
     try {
-      const { title, description } = await api.compose({ file: draft.file, note: noteInput.value.trim(), stream: 'good' });
+      const { title, description } = await api.compose({ file: draft.file, note: noteInput.value.trim(), stream: 'good', lang: currentLang() });
       if (my !== seq) return;
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !descInput.value.trim()) descInput.value = description;
@@ -641,16 +700,18 @@ function renderShell(centerNode) {
       <div class="spacer"></div>
       <div class="me">
         <div class="av">${esc(u.avatar || '·')}</div>
-        <div><b>${esc(u.name)}</b><span>${u.neighborhood ? esc(u.neighborhood) + ' · ' : ''}Lv. ${u.level} ${esc(u.levelTitle)}</span></div>
+        <div><b>${esc(u.name)}</b><span>${u.neighborhood ? esc(u.neighborhood) + ' · ' : ''}${esc(t('Lv.'))} ${u.level} ${esc(u.levelTitle)}</span></div>
       </div>
-      <button class="signout">Sign out</button>
+      <div class="rail-foot"></div>
+      <button class="signout">${esc(t('Sign out'))}</button>
     </aside>`);
   const navSlot = rail.querySelector('.nav-slot');
   NAV.forEach((n) => {
-    const item = h(`<button class="nav-i ${state.view === n.key ? 'on' : ''}" data-help="nav-${n.key}">${ICONS[n.icon]}${n.label}</button>`);
+    const item = h(`<button class="nav-i ${state.view === n.key ? 'on' : ''}" data-help="nav-${n.key}">${ICONS[n.icon]}${esc(t(n.label))}</button>`);
     item.onclick = () => go(n.key);
     navSlot.appendChild(item);
   });
+  rail.querySelector('.rail-foot').appendChild(langSwitcher());
   rail.querySelector('.signout').onclick = signOut;
   rail.querySelector('.me').onclick = openAccount;
   rail.querySelector('.me').style.cursor = 'pointer';
@@ -670,18 +731,20 @@ function renderShell(centerNode) {
 }
 
 function mobileTop() {
-  const t = h(`<div class="mobile-top"><div class="brand cjk">优城美市<small>Our Block</small></div></div>`);
-  const out = h(`<button class="signout" style="width:auto;padding:7px 12px;background:var(--card);color:var(--ink-soft);border-color:var(--line)">Sign out</button>`);
+  const bar = h(`<div class="mobile-top"><div class="brand cjk">优城美市<small>Our Block</small></div></div>`);
+  const right = h(`<div class="mobile-top-right"></div>`);
+  const out = h(`<button class="signout" style="width:auto;padding:7px 12px;background:var(--card);color:var(--ink-soft);border-color:var(--line)">${esc(t('Sign out'))}</button>`);
   out.onclick = signOut;
-  t.appendChild(out);
-  return t;
+  right.append(langSwitcher('compact'), out);
+  bar.appendChild(right);
+  return bar;
 }
 
 function mobileNav() {
   const nav = h(`<nav class="pnav"></nav>`);
   [['near', 'Map', 'near'], ['care', 'Care', 'care'], ['impact', 'Impact', 'impact'], ['community', 'Me', 'community']]
     .forEach(([key, label, icon]) => {
-      const b = h(`<button class="${state.view === key ? 'on' : ''}">${ICONS[icon]}${label}</button>`);
+      const b = h(`<button class="${state.view === key ? 'on' : ''}">${ICONS[icon]}${esc(t(label))}</button>`);
       b.onclick = () => go(key);
       nav.appendChild(b);
     });
@@ -1424,7 +1487,7 @@ function captureView() {
     aiBox.classList.remove('hidden');
     aiText.innerHTML = '<b>Reading your photo…</b>';
     try {
-      const { title, description } = await api.describeImage(file, draft.stream);
+      const { title, description } = await api.describeImage(file, draft.stream, currentLang());
       if (seq !== describeSeq) return; // a newer photo superseded this one
       if (title && !titleInput.value.trim()) titleInput.value = title;
       if (description && !bodyInput.value.trim()) bodyInput.value = description;

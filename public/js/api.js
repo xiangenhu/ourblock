@@ -60,8 +60,8 @@ export const api = {
   },
 
   /** Photo-only convenience wrapper used by the signed-in capture screen. */
-  describeImage(file, stream) {
-    return this.compose({ file, stream });
+  describeImage(file, stream, lang) {
+    return this.compose({ file, stream, lang });
   },
 
   saveToken: (t) => t && localStorage.setItem(TOKEN_KEY, t),
