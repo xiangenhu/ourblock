@@ -3,7 +3,6 @@ import { requireAuth, isAdminEmail } from '../auth.js';
 import { classify } from '../ai.js';
 import { posts, users, addComment, addLoopStep, toggleReaction } from '../store/repo.js';
 import { shapePost, getViewer, distanceMeters, authorSnapshot } from '../helpers.js';
-import { sampleList } from '../samples.js';
 import events from '../xapi/events.js';
 
 // Anonymous "The Good" posts carry this guest author (no account, no stable id).
@@ -72,11 +71,6 @@ router.get('/pins', async (req, res) => {
       distanceM: viewer ? distanceMeters(viewer.lat, viewer.lng, p.lat, p.lng) : null,
     }));
   res.json({ pins, viewer: viewer ? { lat: viewer.lat, lng: viewer.lng } : null });
-});
-
-/** Public showcase posts for the anonymous landing page (hardcoded, not persisted). */
-router.get('/samples', (_req, res) => {
-  res.json({ samples: sampleList() });
 });
 
 router.get('/:id', async (req, res) => {
