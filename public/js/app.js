@@ -265,18 +265,10 @@ function renderAuth() {
 }
 
 /* ===================================================================== landing
- * Everything an anonymous visitor sees: an attractive public page with sample
+ * Everything an anonymous visitor sees: an attractive public page with real
  * Good/Care locations on a live map, a way to share "the good" (location only),
  * read-only post detail, and a Log in button. "Needs care" + replies need auth.
  * ========================================================================== */
-
-let _samplesCache = null;
-async function getSamples() {
-  if (_samplesCache) return _samplesCache;
-  try { _samplesCache = (await api.get('/api/posts/samples')).samples || []; }
-  catch { _samplesCache = []; }
-  return _samplesCache;
-}
 
 function anonTopBar() {
   const bar = h(`
@@ -311,22 +303,24 @@ async function renderLanding() {
   hero.querySelector('[data-login]').onclick = () => go('login');
   wrap.appendChild(hero);
 
-  const samples = await getSamples();
-  wrap.appendChild(landingMap(samples));
-
-  // Mix real public "good" posts in with the samples; care column is samples only
-  // (anonymous visitors can't create care, so there's nothing real to surface yet).
-  let realGood = [];
-  try { realGood = (await api.get('/api/posts?stream=good&sort=new&limit=6')).posts || []; } catch { /* offline */ }
-  const goodAll = [...realGood, ...samples.filter((s) => s.stream === 'good')];
-  const care = samples.filter((s) => s.stream === 'care');
+  // Fetch a wide pool of real public posts and let the map's radius filter narrow it
+  // client-side as the visitor pans/zooms.
+  let realPosts = [];
+  try {
+    const [g, c] = await Promise.all([
+      api.get('/api/posts?stream=good&sort=new&limit=50').catch(() => ({ posts: [] })),
+      api.get('/api/posts?stream=care&sort=new&limit=50').catch(() => ({ posts: [] })),
+    ]);
+    realPosts = [...(g.posts || []), ...(c.posts || [])];
+  } catch { /* offline */ }
 
   const cols = h(`<div class="land-cols"></div>`);
   const goodCol = h(`<div class="land-col"><h2>✦ ${esc(t('The Good nearby'))}</h2><div class="land-grid"></div></div>`);
   const careCol = h(`<div class="land-col"><h2>△ ${esc(t('Needs Care nearby'))}</h2><div class="land-grid"></div></div>`);
-  goodAll.forEach((p) => goodCol.querySelector('.land-grid').appendChild(landingCard(p)));
-  care.forEach((p) => careCol.querySelector('.land-grid').appendChild(landingCard(p)));
   cols.append(goodCol, careCol);
+
+  // The map owns the radius filter and keeps the two columns in sync as it pans/zooms.
+  wrap.appendChild(landingMap(realPosts, goodCol.querySelector('.land-grid'), careCol.querySelector('.land-grid')));
   wrap.appendChild(cols);
 
   wrap.appendChild(h(`<footer class="land-foot">优城美市 · ${esc(t('Our Block — a place-based civic wellbeing app.'))}</footer>`));
@@ -348,45 +342,90 @@ function landingCard(p) {
   return card;
 }
 
-function landingMap(samples) {
+// Radius choices for the landing filter. Default is one mile (1609.34 m); the picker lets a
+// visitor widen the view. Distances are great-circle (haversine) from the map's centre.
+const LAND_RADII = [
+  { mi: 1, m: 1609.34 },
+  { mi: 3, m: 4828.03 },
+  { mi: 5, m: 8046.72 },
+  { mi: 10, m: 16093.4 },
+];
+
+function landingMap(realPosts, goodGrid, careGrid) {
+  let radiusM = LAND_RADII[0].m; // 1 mile by default
+
   const card = h(`
     <div class="map-card land-map">
-      <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(t('Exploring nearby'))}</span></div>
+      <div class="loc">
+        <span class="live"></span>📍 <span class="loc-name">${esc(t('Exploring nearby'))}</span>
+        <label class="radius-pick">${esc(t('Within'))} <select class="radius-select" aria-label="${esc(t('Show posts within this radius'))}"></select></label>
+      </div>
       <div class="gmap"></div>
     </div>`);
   const el = card.querySelector('.gmap');
   const nameEl = card.querySelector('.loc-name');
+  const sel = card.querySelector('.radius-select');
+  LAND_RADII.forEach((r) => sel.appendChild(h(`<option value="${r.m}">${r.mi} ${esc(t('mi'))}</option>`)));
+  sel.value = String(radiusM);
 
   getEngine().then(async ({ create }) => {
-    const first = samples[0];
-    let real = [];
-    try { real = (await api.get('/api/posts/pins')).pins || []; } catch { /* offline */ }
-
+    const first = realPosts.find((p) => p.lat != null);
     const M = create(el, first ? [first.lat, first.lng] : [20, 0], first ? 14 : 2);
 
-    let pins = [];
+    let origin = null;   // the visitor's real location, once geolocation resolves
+    let pins = [];       // current pin markers
     let youM = null;
-    const place = (origin) => {
-      pins.forEach((m) => M.remove(m)); pins = [];
-      const bounds = [];
-      const add = (lat, lng, good, id) => { pins.push(M.addPin(lat, lng, good, () => go(`post/${id}`))); bounds.push([lat, lng]); };
-      // Place sample pins near the visitor when we know where they are.
-      samples.forEach((s) => {
-        const lat = origin && s.offset ? origin[0] + s.offset.dLat : s.lat;
-        const lng = origin && s.offset ? origin[1] + s.offset.dLng : s.lng;
-        add(lat, lng, s.stream === 'good', s.id);
-      });
-      real.filter((p) => p.lat != null).forEach((p) => add(p.lat, p.lng, p.stream === 'good', p.id));
-      if (origin) { if (youM) M.move(youM, origin[0], origin[1]); else youM = M.addYou(origin[0], origin[1]); bounds.push(origin); }
-      M.fit(bounds, 16);
+    let ready = false;   // suppress filtering on programmatic moves during setup
+
+    // Resolve every real post to an absolute [lat,lng] using its own stored coordinates.
+    const resolved = () =>
+      realPosts.filter((p) => p.lat != null).map((p) => ({ ...p, _lat: p.lat, _lng: p.lng }));
+
+    const liveCentre = () => (M.center && M.center()) || origin || (first ? [first.lat, first.lng] : null);
+    const within = (c) => {
+      const all = resolved();
+      if (!c) return all;
+      return all.filter((p) => { const d = haversine({ lat: c[0], lng: c[1] }, { lat: p._lat, lng: p._lng }); return d != null && d <= radiusM; });
     };
-    place(null);
+
+    // Repaint pins + both columns from a precomputed in-radius set.
+    const paint = (list) => {
+      pins.forEach((m) => M.remove(m)); pins = [];
+      list.forEach((p) => pins.push(M.addPin(p._lat, p._lng, p.stream === 'good', () => go(`post/${p.id}`))));
+      const fill = (grid, items, emptyMsg) => {
+        grid.innerHTML = '';
+        if (items.length) items.forEach((p) => grid.appendChild(landingCard(p)));
+        else grid.appendChild(h(`<p class="land-empty">${esc(emptyMsg)}</p>`));
+      };
+      fill(goodGrid, list.filter((p) => p.stream === 'good'), t('Be the first to report what’s good here.'));
+      fill(careGrid, list.filter((p) => p.stream === 'care'), t('Nothing flagged for care nearby — that’s a good sign.'));
+    };
+
+    // Recentre on an explicit point, fit the view to that point's in-radius posts, and paint.
+    // Used on first render, on location lock, and on radius change. We pass the target centre
+    // explicitly (rather than reading the map) because the fit moves the map asynchronously.
+    const recentre = (c) => {
+      ready = false;
+      const list = within(c);
+      const bounds = list.map((p) => [p._lat, p._lng]);
+      if (origin) bounds.push(origin);
+      if (bounds.length) M.fit(bounds, 16);
+      paint(list);
+      setTimeout(() => { ready = true; }, 300); // ignore the fit's own move event
+    };
+
+    // User pans/zooms → re-filter around wherever the map now sits.
+    if (M.onMove) M.onMove(() => { if (ready) paint(within(liveCentre())); });
+    sel.onchange = () => { radiusM = Number(sel.value); recentre(liveCentre()); };
+
+    recentre(liveCentre());
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
-        const here = [pos.coords.latitude, pos.coords.longitude];
-        place(here);
-        const geo = await reverseGeocode(here[0], here[1]);
+        origin = [pos.coords.latitude, pos.coords.longitude];
+        if (youM) M.move(youM, origin[0], origin[1]); else youM = M.addYou(origin[0], origin[1]);
+        recentre(origin);
+        const geo = await reverseGeocode(origin[0], origin[1]);
         if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
       }, () => { /* keep sample view */ }, { enableHighAccuracy: true, timeout: 8000 });
     }
@@ -655,12 +694,6 @@ async function renderAnonPost(id) {
   view.querySelector('[data-back]').onclick = () => go('');
   const slot = view.querySelector('.slot');
 
-  if (String(id).startsWith('sample-')) {
-    const p = (await getSamples()).find((s) => s.id === id);
-    slot.innerHTML = '';
-    slot.appendChild(p ? anonPostCard(p, { sample: true }) : h(`<div class="empty"><b>${esc(t('Not found'))}</b></div>`));
-    return;
-  }
   try {
     const { post: p, comments } = await api.get(`/api/posts/${id}`);
     slot.innerHTML = '';
@@ -1130,6 +1163,14 @@ function wgs84ToGcj02(lat, lng) {
   return [lat + dLat, lng + dLng];
 }
 
+// Rough inverse of the above: GCJ-02 → WGS-84. Amap reports its centre in GCJ-02, but our
+// posts (and the haversine radius filter) are in WGS-84, so the map centre is shifted back
+// before any distance math. Accurate to a few metres — fine for a one-mile radius.
+function gcj02ToWgs84(lat, lng) {
+  const [gLat, gLng] = wgs84ToGcj02(lat, lng);
+  return [lat * 2 - gLat, lng * 2 - gLng];
+}
+
 // Is the browser in China? Prefer its real location, then the edge geo-IP hint, then
 // locale/timezone (the only signal available in local dev, where the geo header is empty).
 function browserInChina() {
@@ -1202,6 +1243,8 @@ const googleEngine = (g) => (el, center, zoom) => {
     fit: (pts, maxZoom) => { if (!pts.length) return; const b = new g.LatLngBounds(); pts.forEach((p) => b.extend({ lat: p[0], lng: p[1] })); map.fitBounds(b, 48); g.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > maxZoom) map.setZoom(maxZoom); }); },
     view: (c, z) => { map.setCenter({ lat: c[0], lng: c[1] }); map.setZoom(z); },
     zoom: () => map.getZoom(),
+    center: () => { const c = map.getCenter(); return c ? [c.lat(), c.lng()] : null; },
+    onMove: (cb) => g.event.addListener(map, 'idle', cb),
   };
 };
 const leafletEngine = (L) => (el, center, zoom) => {
@@ -1218,6 +1261,8 @@ const leafletEngine = (L) => (el, center, zoom) => {
     fit: (pts, maxZoom) => { if (pts.length) map.fitBounds(pts, { padding: [35, 35], maxZoom }); },
     view: (c, z) => map.setView(c, z),
     zoom: () => map.getZoom(),
+    center: () => { const c = map.getCenter(); return [c.lat, c.lng]; },
+    onMove: (cb) => map.on('moveend', cb),
   };
 };
 
@@ -1251,6 +1296,8 @@ const amapEngine = (AMap) => (el, center, zoom) => {
     },
     view: (c, z) => map.setZoomAndCenter(z, toPos(c[0], c[1])),
     zoom: () => map.getZoom(),
+    center: () => { const c = map.getCenter(); const lat = c.getLat ? c.getLat() : c.lat; const lng = c.getLng ? c.getLng() : c.lng; return gcj02ToWgs84(lat, lng); },
+    onMove: (cb) => map.on('moveend', cb),
   };
 };
 

@@ -367,6 +367,9 @@ a{color:inherit}
 
 .land-map{margin-top:8px}
 .land-map .gmap{height:280px}
+.radius-pick{display:inline-flex;align-items:center;gap:5px;margin-left:6px;padding-left:8px;border-left:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--ink-soft)}
+.radius-select{font:inherit;font-weight:700;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:7px;padding:2px 5px;cursor:pointer}
+.land-empty{font-size:13px;color:var(--ink-soft);background:var(--paper-2);border:1px dashed var(--line);border-radius:12px;padding:14px;text-align:center}
 
 .land-cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px}
 .land-col h2{font-family:var(--display);font-weight:700;font-size:16px;margin-bottom:12px;color:var(--ink)}
