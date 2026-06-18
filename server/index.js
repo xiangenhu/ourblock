@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import postRoutes from './routes/posts.js';
 import uploadRoutes, { mediaRouter } from './routes/upload.js';
 import statsRoutes from './routes/stats.js';
+import communityRoutes from './routes/community.js';
 import aiRoutes from './routes/ai.js';
 import i18nRoutes from './routes/i18n.js';
 import mapsRoutes from './routes/maps.js';
@@ -31,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/community', communityRoutes); // official accounts + Block Pulse dashboard
 app.use('/api/ai', aiRoutes); // POST /api/ai/describe — vision title/description for a photo
 app.use('/api/i18n', i18nRoutes); // hash-based UI translation registry (dict + register)
 app.use('/api/maps', mapsRoutes); // self-hosted map tiles + reverse geocoding proxy

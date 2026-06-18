@@ -42,6 +42,14 @@ export const users = {
       level: u.level ?? 1,
       levelTitle: u.levelTitle ?? 'Steward',
       avatar: u.avatar ?? '·',
+      avatarSeed: u.avatarSeed ?? null,   // cartoon-avatar generator seed (set on first render)
+      points: u.points ?? 0,              // spendable balance (Thanks debits it)
+      pointsEarned: u.pointsEarned ?? 0,  // lifetime gross → drives level
+      badges: u.badges ?? [],             // founding-steward, season-*
+      role: u.role ?? 'resident',         // resident | official (verified org/property)
+      orgName: u.orgName ?? null,
+      verified: u.verified ?? false,
+      home: u.home ?? null,               // { lat, lng, name } — the "home / places I care about"
       createdAt: nowIso(),
     };
     await store.set(`db/users/${id}.json`, doc);
@@ -82,8 +90,14 @@ export const posts = {
       lat: p.lat ?? null,
       lng: p.lng ?? null,
       placeName: p.placeName || null,
+      mood: p.mood || null,        // emotion tag: happy|neutral|sad|angry|anxious
+      groups: p.groups || [],      // concern-group tags (fixed vocabulary)
       ai: p.ai || { tag: null, category: null, action: null, confidence: null, summary: null },
       status: p.status || 'open',
+      claim: null,                 // { userId, name, official, at } — who is handling it
+      verify: null,                // { userId, name, at } — who confirmed the fix
+      story: null,                 // auto-generated resolution story
+      thanks: [],                  // { fromId, toId, at }
       createdAt: p.createdAt || nowIso(),
       author: p.author || null, // snapshot {id,name,nameCjk,avatar,level,levelTitle}
       reactions: [], // { userId, type, createdAt }
