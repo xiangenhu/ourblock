@@ -49,6 +49,13 @@ export function shapePost(post, viewer) {
     lng: post.lng,
     placeName: post.placeName,
     distanceM: dist,
+    mood: post.mood ?? null,
+    groups: post.groups ?? [],
+    claim: post.claim ?? null,
+    verify: post.verify ?? null,
+    story: post.story ?? null,
+    thanks: (post.thanks || []).length,
+    thankedByMe: viewer ? (post.thanks || []).some((t) => t.fromId === viewer.id) : false,
     ai: {
       tag: post.ai?.tag ?? null,
       category: post.ai?.category ?? null,

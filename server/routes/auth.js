@@ -19,6 +19,7 @@ import { users } from '../store/repo.js';
 import store from '../store/gcs.js';
 import events from '../xapi/events.js';
 import oauthGateway from '../oauthGateway.js';
+import { grantBadge, isFounder } from '../gamify.js';
 import config from '../config.js';
 
 const router = express.Router();
@@ -36,6 +37,15 @@ function publicUser(u) {
     level: u.level,
     levelTitle: u.levelTitle,
     avatar: u.avatar,
+    avatarSeed: u.avatarSeed || null,
+    points: u.points || 0,
+    pointsEarned: u.pointsEarned || 0,
+    badges: u.badges || [],
+    role: u.role || 'resident',
+    orgName: u.orgName || null,
+    verified: !!u.verified,
+    officialPending: !!u.orgRequest && !u.verified,
+    home: u.home || null,
     provider: u.provider || 'email',
     picture: u.picture || null,
     isAdmin: isAdminEmail(u.email), // steward tier (TEACHER_EMAILS); drives admin-only UI
@@ -373,7 +383,11 @@ router.post('/logout', async (req, res) => {
 
 router.get('/me', async (req, res) => {
   if (!req.userId) return res.json({ user: null });
-  const user = await users.getById(req.userId);
+  let user = await users.getById(req.userId);
+  // Grant the Founding Steward badge (⑧) lazily to eligible early neighbours (idempotent).
+  if (user && isFounder(user.id) && !(user.badges || []).includes('founding-steward')) {
+    user = (await grantBadge(user.id, 'founding-steward')) || user;
+  }
   res.json({ user: user ? publicUser(user) : null });
 });
 
@@ -384,6 +398,21 @@ router.put('/me/location', requireAuth, async (req, res) => {
     if (lat != null) u.lat = lat;
     if (lng != null) u.lng = lng;
     if (neighborhood != null) u.neighborhood = neighborhood;
+    return u;
+  });
+  if (!updated) return res.status(404).json({ error: 'User not found.' });
+  res.json({ user: publicUser(updated) });
+});
+
+/** Save the cartoon-avatar seed (③) and/or the home location (Needs-care ①). */
+router.put('/me/profile', requireAuth, async (req, res) => {
+  const { avatarSeed, home } = req.body || {};
+  const updated = await store.mutate(`db/users/${req.userId}.json`, null, (u) => {
+    if (!u) return null;
+    if (avatarSeed != null && Number.isFinite(Number(avatarSeed))) u.avatarSeed = Number(avatarSeed) >>> 0;
+    if (home && home.lat != null && home.lng != null)
+      u.home = { lat: Number(home.lat), lng: Number(home.lng), name: home.name ? String(home.name).slice(0, 80) : null };
+    else if (home === null) u.home = null;
     return u;
   });
   if (!updated) return res.status(404).json({ error: 'User not found.' });

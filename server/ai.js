@@ -182,4 +182,54 @@ export async function composePost({ base64, mediaType, note, stream = 'care', us
 // Back-compat alias for the photo-only capture path.
 export const describeImage = composePost;
 
+/* ── Resolution story (④) ─────────────────────────────────────────────────────
+ * When a care loop closes, weave its journey (report → handling → verification) into a
+ * short 2–3 sentence "solved story" that makes the collective effort visible. Goes through
+ * the single gateway; falls back to a clean template so it always produces something.
+ */
+const STORY_SYSTEM =
+  'You write a short, warm "resolution story" for a neighbourhood care item that was just fixed. ' +
+  '2–3 sentences, plain language, celebrating the neighbours who helped without exaggerating. ' +
+  'Do not invent facts beyond what is given. Return ONLY the story text, no quotes, no preamble.';
+
+function storyTemplate({ title, placeName, reporter, handler, verifier, lang }) {
+  const where = placeName ? ` at ${placeName}` : '';
+  if (lang === 'zh') {
+    return `「${title}」的问题已经解决了${placeName ? `（${placeName}）` : ''}。` +
+      `${reporter || '一位邻居'}最先发现并记录，` +
+      `${handler ? `${handler}主动认领处理，` : '大家一起跟进，'}` +
+      `${verifier ? `${verifier}确认修复完成。` : '最终顺利收尾。'}一次小小的守护，让街区更好了一点。`;
+  }
+  return `“${title}”${where} is now resolved. ` +
+    `${reporter || 'A neighbour'} first spotted and reported it` +
+    `${handler ? `, ${handler} took it on` : ''}` +
+    `${verifier ? `, and ${verifier} confirmed the fix` : ''}. ` +
+    `A small act of care that made the block a little better.`;
+}
+
+export async function resolutionStory({ title, placeName, reporter, handler, verifier, lang } = {}) {
+  const fallback = storyTemplate({ title, placeName, reporter, handler, verifier, lang });
+  if (!config.has.llm()) return fallback;
+  try {
+    const facts = [
+      `title: ${title}`,
+      placeName ? `place: ${placeName}` : null,
+      reporter ? `reported by: ${reporter}` : null,
+      handler ? `handled by: ${handler}` : null,
+      verifier ? `verified by: ${verifier}` : null,
+    ].filter(Boolean).join('\n');
+    const txt = await callLLM({
+      feature: 'resolution-story',
+      lang,
+      maxTokens: 200,
+      system: STORY_SYSTEM,
+      user: `Write the resolution story from these facts:\n${facts}`,
+    });
+    const clean = String(txt || '').replace(/^["'\s]+|["'\s]+$/g, '');
+    return clean.length > 10 ? clean.slice(0, 600) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export { heuristic };

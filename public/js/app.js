@@ -1,7 +1,19 @@
 import { api } from './api.js';
 import { h, esc, timeAgo, dist, toast, ICONS } from './ui.js';
 import { exifGps, haversine } from './exif.js';
+import { cropImage } from './crop.js';
+import { avatarSvg, randomSeed } from './avatar.js';
 import { t, tf, initI18n, setUiLang, currentUiLang, UI_LANGS_META } from './i18n.js';
+
+/* Cartoon avatar (③) — an inline generative SVG seeded by the user. Everyone gets a stable
+ * cartoon even without a saved seed (derived from their name); "regenerate" persists a fresh
+ * random seed. `person` is any object with { avatarSeed?, name?, nameCjk?, avatar? }. */
+function avatarMarkup(person, size = 40) {
+  const seed = (person && person.avatarSeed != null)
+    ? person.avatarSeed
+    : (person?.name || person?.nameCjk || person?.avatar || 'block');
+  return avatarSvg(seed, size);
+}
 
 const app = document.getElementById('app');
 
@@ -27,11 +39,87 @@ const STREAM_META = {
   care: { dot: 'c', icon: '△', title: 'Needs Care', sub: 'Notice what needs attention — then act' },
 };
 
+// Emotion tags (⑦) — a quick affective signal attached to a post; shown as an icon in feeds.
+const MOODS = [
+  { id: 'happy', e: '😊', label: 'Happy' },
+  { id: 'neutral', e: '😐', label: 'Okay' },
+  { id: 'sad', e: '😢', label: 'Sad' },
+  { id: 'angry', e: '😡', label: 'Upset' },
+  { id: 'anxious', e: '😰', label: 'Worried' },
+];
+const moodOf = (id) => MOODS.find((m) => m.id === id) || null;
+
+// Narrative card label (④) — turn each post into a one-line "card story" so the feed reads
+// like a sequence of small neighbourhood moments rather than a list of rows. Purely derived
+// from fields already present (no extra fetch): actor + verb + place + relative time.
+function narrativeLabel(p) {
+  const who = (p.author?.nameCjk || p.author?.name || t('A neighbour')).split(' ')[0];
+  const where = p.placeName || t('nearby');
+  const when = timeAgo(p.createdAt);
+  const key = p.stream === 'good'
+    ? '{who} noticed something good at {where} · {when}'
+    : (p.status === 'resolved'
+      ? '{who} helped close a care item at {where} · {when}'
+      : '{who} flagged something that needs care at {where} · {when}');
+  return tf(key, { who: esc(who), where: esc(where), when });
+}
+
+// Concern-group tags (⑥) — whose needs a post speaks for, so quieter voices stay visible.
+const CONCERN_GROUPS = [
+  { id: 'elderly', e: '👵', label: 'Elderly' },
+  { id: 'children', e: '🧒', label: 'Children' },
+  { id: 'disabled', e: '♿', label: 'Accessibility' },
+  { id: 'low_income', e: '🤝', label: 'Low-income' },
+  { id: 'newcomers', e: '🧳', label: 'Newcomers' },
+  { id: 'pets', e: '🐾', label: 'Pets & strays' },
+  { id: 'commuters', e: '🚌', label: 'Commuters' },
+  { id: 'everyone', e: '🌍', label: 'Everyone' },
+];
+const groupOf = (id) => CONCERN_GROUPS.find((g) => g.id === id) || null;
+
+// Badge chips — founding steward (⑧) + per-season badges (①). Season keys look like
+// `season-2026-summer`; anything else falls back to a generic medal.
+function badgeChip(key) {
+  if (key === 'founding-steward')
+    return `<span class="badge-chip founding" title="${esc(t('One of the first to tend this block'))}">🏅 ${esc(t('Founding Steward'))}</span>`;
+  const m = /^season-(\d{4})-(\w+)$/.exec(key || '');
+  if (m) { const name = m[2][0].toUpperCase() + m[2].slice(1); return `<span class="badge-chip">🎖 ${esc(t(name))} ${esc(m[1])}</span>`; }
+  return `<span class="badge-chip">🎖 ${esc(key)}</span>`;
+}
+
+// Task checklist (④) — renders the server-derived daily/weekly/season tasks with done ticks.
+function taskChecklist(tasks) {
+  const groups = { daily: [], weekly: [], season: [] };
+  tasks.forEach((tk) => (groups[tk.period] || groups.daily).push(tk));
+  const box = h(`<div class="card task-card"><h4 style="font-family:var(--display);margin-bottom:8px">${esc(t('Your missions'))}</h4></div>`);
+  [['daily', 'Today'], ['weekly', 'This week'], ['season', 'This season']].forEach(([p, label]) => {
+    if (!groups[p].length) return;
+    box.appendChild(h(`<div class="task-period">${esc(t(label))}</div>`));
+    groups[p].forEach((tk) => box.appendChild(h(
+      `<div class="task-row ${tk.done ? 'done' : ''}"><span class="task-tick">${tk.done ? '✓' : ''}</span>
+        <span class="task-label">${esc(t(tk.label))}</span>
+        <span class="task-prog">${tk.have}/${tk.need}</span></div>`)));
+  });
+  return box;
+}
+
 const ACTION_LABEL = { self: 'Tend it yourself', rally: 'Rally neighbours', city: 'Send to the city' };
 const STATUS_LABEL = {
-  open: 'Open', rallying: 'Rallying neighbours', routed: 'Routed to city',
+  open: 'Unclaimed', rallying: 'Rallying neighbours', routed: 'Routed to city',
+  claimed: 'Being handled', pending_verify: 'Awaiting a neighbour’s check',
   in_progress: 'In progress', resolved: 'Resolved',
 };
+// The closure ladder shown as a progress strip on care items (③).
+const CARE_LADDER = [
+  { key: 'open', label: 'Unclaimed' },
+  { key: 'claimed', label: 'Being handled' },
+  { key: 'pending_verify', label: 'Awaiting check' },
+  { key: 'resolved', label: 'Resolved' },
+];
+// Map any legacy status onto a ladder rung so old posts still render on the strip.
+const ladderRung = (status) =>
+  status === 'resolved' ? 3 : status === 'pending_verify' ? 2 : status === 'claimed' ? 1
+  : ['rallying', 'routed', 'in_progress'].includes(status) ? 1 : 0;
 
 /* ---------------------------------------------------------------- bootstrap */
 async function boot() {
@@ -595,18 +683,22 @@ function renderAnonShare() {
   locEl.onclick = requestLoc;
   requestLoc();
 
-  // photo → preview + auto-compose from the image
-  view.querySelector('input[type=file]').onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    draft.file = file;
+  // photo → let the neighbour crop it, then preview + auto-compose from the image
+  view.querySelector('input[type=file]').onchange = async (e) => {
+    const original = e.target.files[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!original) return;
+    const cropped = await cropImage(original); // null = cancelled
+    if (!cropped) return;
+    draft.file = cropped;
     preview.classList.remove('hidden');
     preview.innerHTML = '';
-    preview.appendChild(h(`<img src="${URL.createObjectURL(file)}" alt="${esc(t('preview'))}">`));
+    preview.appendChild(h(`<img src="${URL.createObjectURL(cropped)}" alt="${esc(t('preview'))}">`));
     refresh();
     compose();
+    // GPS lives in the ORIGINAL file's EXIF — cropping re-encodes and strips it.
     draft.photoGps = null;
-    exifGps(file).then((g) => { draft.photoGps = g; verifyPhotoGeo(draft, geoEl, refresh); });
+    exifGps(original).then((g) => { draft.photoGps = g; verifyPhotoGeo(draft, geoEl, refresh); });
   };
 
   // AI compose (from the photo and/or the note)
@@ -723,7 +815,7 @@ function anonPostCard(p, { sample, comments } = {}) {
     cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">${esc(t('This is a sample showing how Our Block works. Log in to join your real block.'))}</p>`));
   } else {
     (comments || []).forEach((c) => cbox.appendChild(h(`
-      <div class="comment"><div class="av">${esc(c.avatar || '·')}</div>
+      <div class="comment"><div class="av cartoon">${avatarMarkup({ name: c.author, avatar: c.avatar }, 30)}</div>
         <div><b>${esc(c.author)}</b> <span style="color:var(--ink-soft);font-size:11px">· ${timeAgo(c.createdAt)}</span>
         <p>${esc(c.body)}</p></div></div>`)));
     if (!comments || !comments.length) cbox.appendChild(h(`<p style="font-size:12.5px;color:var(--ink-soft)">${esc(t('No replies yet.'))}</p>`));
@@ -757,8 +849,8 @@ function renderShell(centerNode) {
       <div class="nav-slot"></div>
       <div class="spacer"></div>
       <div class="me">
-        <div class="av">${esc(u.avatar || '·')}</div>
-        <div><b>${esc(u.name)}</b><span>${u.neighborhood ? esc(u.neighborhood) + ' · ' : ''}${esc(t('Lv.'))} ${u.level} ${esc(u.levelTitle)}</span></div>
+        <div class="av cartoon">${avatarMarkup(u, 40)}</div>
+        <div><b>${esc(u.name)}</b><span>${esc(t('Lv.'))} ${u.level} ${esc(t(u.levelTitle))} · ${tf('{n} pts', { n: u.pointsEarned || 0 })}</span></div>
       </div>
       <div class="rail-foot"></div>
       <button class="signout">${esc(t('Sign out'))}</button>
@@ -831,11 +923,20 @@ function openAccount() {
   const modal = h(`
     <div class="modal">
       <div class="modal-head">
-        <div class="av" style="width:38px;height:38px;border-radius:99px;display:grid;place-items:center;background:linear-gradient(135deg,var(--good),#D98748);color:#3a2a10;font-family:var(--display);font-weight:700">${esc(u.avatar || '·')}</div>
+        <div class="av cartoon" style="width:46px;height:46px">${avatarMarkup(u, 46)}</div>
         <div><b style="font-family:var(--display);font-size:15px">${esc(u.name)}</b><div style="font-size:11.5px;color:var(--ink-soft)">${esc(u.email)} · ${isGoogle ? esc(t('Google account')) : esc(t('Email account'))}</div></div>
         <button class="modal-x" aria-label="${esc(t('Close'))}">✕</button>
       </div>
       <div class="modal-body">
+        <h4 style="font-family:var(--display);font-size:13px;margin-bottom:8px">${esc(t('Your cartoon avatar'))}</h4>
+        <div class="avatar-edit">
+          <div class="av cartoon big" data-av-preview>${avatarMarkup(u, 72)}</div>
+          <div>
+            <p style="font-size:12px;color:var(--ink-soft);margin-bottom:8px">${esc(t('A unique character, generated just for you.'))}</p>
+            <button class="btn ghost" type="button" data-regen>🎲 ${esc(t('Generate a new one'))}</button>
+          </div>
+        </div>
+        <div class="modal-divider"></div>
         ${isGoogle ? `
           <p style="font-size:12.5px;color:var(--ink-soft);line-height:1.5">${esc(t("You're signed in with Google. Manage your password and security in your Google account."))}</p>`
         : `
@@ -846,12 +947,29 @@ function openAccount() {
             <div class="field"><label>${esc(t('New password'))}</label><input name="newPassword" type="password" placeholder="${esc(t('at least 6 characters'))}" required></div>
             <button class="btn primary" type="submit">${esc(t('Update password'))}</button>
           </form>`}
+        <div class="modal-divider"></div>
+        <div class="official-slot"></div>
       </div>
     </div>`);
   overlay.appendChild(modal);
   const close = () => overlay.remove();
   overlay.onclick = (e) => { if (e.target === overlay) close(); };
   modal.querySelector('.modal-x').onclick = close;
+
+  // Regenerate cartoon avatar (③) — preview a fresh seed, persist it, re-render the shell.
+  const regen = modal.querySelector('[data-regen]');
+  if (regen) regen.onclick = async () => {
+    const seed = randomSeed();
+    modal.querySelector('[data-av-preview]').innerHTML = avatarSvg(seed, 72);
+    regen.disabled = true;
+    try {
+      const { user } = await api.put('/api/auth/me/profile', { avatarSeed: seed });
+      state.user = user;
+      modal.querySelector('.modal-head .av').innerHTML = avatarMarkup(user, 46);
+      toast(t('New avatar saved'), 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+    finally { regen.disabled = false; }
+  };
 
   const form = modal.querySelector('.acct-form');
   if (form) form.onsubmit = async (e) => {
@@ -866,7 +984,61 @@ function openAccount() {
       btn.disabled = false;
     }
   };
+  renderOfficialSection(modal.querySelector('.official-slot'), () => { state.user && render(); });
+
   document.body.appendChild(overlay);
+}
+
+/* Official/property accounts (①) — apply as a resident, see your status, and (for admins)
+ * verify pending applications. Self-contained so it works from the account modal. */
+function renderOfficialSection(host, onChange) {
+  const u = state.user;
+  host.innerHTML = `<h4 style="font-family:var(--display);font-size:13px;margin-bottom:8px">${esc(t('Official / property account'))}</h4>`;
+
+  if (u.role === 'official' && u.verified) {
+    host.appendChild(h(`<div class="official-chip">🏢 ${tf('Verified · {org}', { org: esc(u.orgName || t('Official')) })}</div>`));
+    host.appendChild(h(`<p class="muted-note">${esc(t('You can claim, update and resolve care items across the block.'))}</p>`));
+  } else if (u.officialPending) {
+    host.appendChild(h(`<div class="official-chip pending">⏳ ${esc(t('Application under review'))}</div>`));
+  } else {
+    const f = h(`<form class="acct-form">
+        <p class="muted-note">${esc(t('Residents’ committee, property management or a local org? Apply to run a verified account.'))}</p>
+        <div class="field"><label>${esc(t('Organisation name'))}</label><input name="orgName" placeholder="${esc(t('e.g. Garden Estate Property Mgmt'))}" required></div>
+        <button class="btn ghost" type="submit">${esc(t('Apply for verification'))}</button>
+      </form>`);
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api.post('/api/community/apply-official', { orgName: f.querySelector('[name=orgName]').value.trim() });
+        state.user = { ...u, officialPending: true };
+        toast(t('Application sent for review'), 'ok');
+        renderOfficialSection(host, onChange);
+      } catch (err) { toast(err.message, 'err'); }
+    };
+    host.appendChild(f);
+  }
+
+  // Admin: pending applications to verify.
+  if (u.isAdmin) {
+    const panel = h(`<div class="admin-officials"><div class="modal-divider"></div>
+        <h4 style="font-family:var(--display);font-size:13px;margin-bottom:8px">${esc(t('Pending official applications'))} <span class="adm-tag">${esc(t('admin'))}</span></h4>
+        <div class="adm-slot">…</div></div>`);
+    host.appendChild(panel);
+    const slot = panel.querySelector('.adm-slot');
+    api.get('/api/community/officials').then(({ pending }) => {
+      slot.innerHTML = '';
+      if (!pending.length) { slot.innerHTML = `<p class="muted-note">${esc(t('No applications waiting.'))}</p>`; return; }
+      pending.forEach((a) => {
+        const row = h(`<div class="adm-row"><div><b>${esc(a.orgName || a.name)}</b><small>${esc(a.name)} · ${esc(a.email)}</small></div>
+            <button class="btn ghost adm-ok">✓ ${esc(t('Verify'))}</button></div>`);
+        row.querySelector('.adm-ok').onclick = async () => {
+          try { await api.post('/api/community/verify-official', { userId: a.id, orgName: a.orgName }); toast(t('Account verified'), 'ok'); row.remove(); onChange?.(); }
+          catch (e) { toast(e.message, 'err'); }
+        };
+        slot.appendChild(row);
+      });
+    }).catch(() => { slot.innerHTML = `<p class="muted-note">${esc(t('Couldn’t load applications.'))}</p>`; });
+  }
 }
 
 /* --------------------------------------------------------------- feed view */
@@ -929,7 +1101,7 @@ async function loadFeed(feed, countEl, offset = 0) {
     else feed.querySelector('.load-more-wrap')?.remove();
     if (countEl) countEl.textContent = tf(state.stream === 'good' ? '{n} good things nearby' : '{n} places that need care', { n: total });
     if (!total) {
-      feed.appendChild(h(`<div class="empty"><b>${esc(t('Nothing here yet'))}</b>${esc(t('Be the first to capture something on your block.'))}</div>`));
+      feed.appendChild(onboardingCard());
       return;
     }
     posts.forEach((p) => feed.appendChild(postCard(p)));
@@ -942,6 +1114,25 @@ async function loadFeed(feed, countEl, offset = 0) {
     if (offset === 0) feed.innerHTML = '';
     feed.appendChild(h(`<div class="empty"><b>${esc(t("Couldn't load the feed"))}</b>${esc(err.message)}</div>`));
   }
+}
+
+/* Cold-start onboarding (⑧) — instead of a bare "nothing here", new neighbours get a warm
+ * welcome, their Founding Steward badge (if eligible), and a few guided first tasks. */
+function onboardingCard() {
+  const u = state.user;
+  const founder = (u.badges || []).includes('founding-steward');
+  const card = h(`<div class="onboard">
+      ${founder ? `<div class="onboard-badge">${badgeChip('founding-steward')}</div>` : ''}
+      <h3>${founder ? esc(t('You’re a Founding Steward of this block ✦')) : esc(t('Welcome to your block ✦'))}</h3>
+      <p>${esc(t('It’s quiet here — which means you get to start the story. Here are three ways to begin.'))}</p>
+      <div class="onboard-steps">
+        <button class="onboard-step" data-go="capture"><span>📸</span><div><b>${esc(t('Capture something good or that needs care'))}</b><small>${esc(t('+5 points · starts a card story'))}</small></div></button>
+        <button class="onboard-step" data-go="good"><span>✦</span><div><b>${esc(t('Browse The Good nearby'))}</b><small>${esc(t('cheer a neighbour to send your first points'))}</small></div></button>
+        <button class="onboard-step" data-go="impact"><span>🎯</span><div><b>${esc(t('See your missions'))}</b><small>${esc(t('daily & weekly tasks to grow your level'))}</small></div></button>
+      </div>
+    </div>`);
+  card.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => go(b.dataset.go));
+  return card;
 }
 
 /* --------------------------------------------------------------- post card */
@@ -962,7 +1153,9 @@ function postCard(p) {
   const far = !canReveal(p);
 
   const body = h(`<div class="pbody"></div>`);
-  const title = h(`<h3>${esc(p.title)}</h3>`);
+  body.appendChild(h(`<div class="narrative">${ICONS.spark}<span>${narrativeLabel(p)}</span></div>`));
+  const mood = moodOf(p.mood);
+  const title = h(`<h3>${mood ? `<span class="mood-ico" title="${esc(t(mood.label))}">${mood.e}</span> ` : ''}${esc(p.title)}</h3>`);
   title.onclick = () => openPostModal(p);
   body.appendChild(title);
   body.appendChild(h(`<div class="pmeta">
@@ -976,6 +1169,7 @@ function postCard(p) {
   if (p.ai?.tag) tags.appendChild(h(`<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>`));
   if (p.stream === 'care' && p.status !== 'open')
     tags.appendChild(h(`<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status]))}</span>`));
+  (p.groups || []).forEach((id) => { const g = groupOf(id); if (g) tags.appendChild(h(`<span class="group-tag">${g.e} ${esc(t(g.label))}</span>`)); });
   if (tags.children.length) body.appendChild(tags);
 
   // Message: a small thumbnail beside the description. The photo/video is no longer shown
@@ -1033,9 +1227,10 @@ function openPostModal(p) {
       <div class="ptags">
         <span class="badge-stream ${g ? 'g' : 'c'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>
         ${p.ai?.tag ? `<span class="ai-tag inline">${ICONS.spark}${esc(p.ai.tag)}</span>` : ''}
-        ${p.stream === 'care' && p.status !== 'open' ? `<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
+        ${p.stream === 'care' && p.status !== 'open' ? `<span class="status-tag ${p.status}">${esc(t(STATUS_LABEL[p.status] || p.status))}</span>` : ''}
+        ${(p.groups || []).map((id) => { const gg = groupOf(id); return gg ? `<span class="group-tag">${gg.e} ${esc(t(gg.label))}</span>` : ''; }).join('')}
       </div>
-      <h2>${esc(p.title)}</h2>
+      <h2>${moodOf(p.mood) ? moodOf(p.mood).e + ' ' : ''}${esc(p.title)}</h2>
       <div class="pmeta">
         <span>📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''}</span>
         <span>· ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })}</span>
@@ -1083,6 +1278,28 @@ function openPostModal(p) {
   document.body.appendChild(overlay);
 }
 
+/* Cheer animation (⑤) — a sub-0.6s particle burst so every Cheer gives instant joyful
+ * feedback instead of just incrementing a number. Pure DOM/CSS; respects reduced-motion.
+ * `origin` is the element the burst radiates from (the tapped button). */
+function celebrate(origin, kind = 'cheer') {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const r = origin.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const glyphs = kind === 'thanks' ? ['💛', '🙏', '✨'] : ['⭐', '❤️', '🎉', '✨'];
+  const layer = h(`<div class="burst" style="left:${x}px;top:${y}px"></div>`);
+  for (let i = 0; i < 11; i++) {
+    const ang = (Math.PI * 2 * i) / 11 + (i % 2 ? 0.4 : 0);
+    const dist = 34 + (i % 4) * 13;
+    const pcl = h(`<span>${glyphs[i % glyphs.length]}</span>`);
+    pcl.style.setProperty('--dx', `${Math.cos(ang) * dist}px`);
+    pcl.style.setProperty('--dy', `${Math.sin(ang) * dist}px`);
+    pcl.style.animationDelay = `${(i % 3) * 20}ms`;
+    layer.appendChild(pcl);
+  }
+  document.body.appendChild(layer);
+  setTimeout(() => layer.remove(), 650);
+}
+
 function reactionRow(p, cardEl) {
   const row = h(`<div class="react"></div>`);
   const g = p.stream === 'good';
@@ -1093,6 +1310,7 @@ function reactionRow(p, cardEl) {
     const btn = h(`<button class="rbtn ${cls} ${on ? 'act' : ''}">${label}${n ? ` · <b>${n}</b>` : ''}</button>`);
     btn.onclick = async () => {
       if (!state.user) return go('');
+      if (!on && type === 'cheer') celebrate(btn, 'cheer'); // joyful feedback the instant it's tapped
       try {
         const { post } = await api.post(`/api/posts/${p.id}/react`, { type });
         const fresh = postCard(post);
@@ -1359,10 +1577,12 @@ function mapCard(streamFilter) {
   const card = h(`
     <div class="map-card">
       <div class="loc"><span class="live"></span>📍 <span class="loc-name">${esc(state.user.neighborhood || t('Locating…'))}</span></div>
+      <div class="loc-switch" role="group" aria-label="${esc(t('Switch location'))}"></div>
       <div class="gmap"></div>
     </div>`);
   const el = card.querySelector('.gmap');
   const nameEl = card.querySelector('.loc-name');
+  const switchBar = card.querySelector('.loc-switch');
 
   getEngine().then(async ({ create }) => {
     let data = { pins: [], viewer: null };
@@ -1388,19 +1608,56 @@ function mapCard(streamFilter) {
     });
     if (pins.length) M.fit(bounds, 16);
 
-    // Ask the browser for the real location, recentre on it and persist it.
-    if (navigator.geolocation) {
+    // ── Location quick-switch (Needs-care ①) ─────────────────────────────────
+    // "Home / places I care about" recentres on the saved home; "📍 Current" re-locates the
+    // device. People care about more than where their body is — the daytime worker still
+    // watches their home block. Home is psychological ownership; the saved point is respected.
+    let mode = 'current';
+    let lastHere = viewerCenter;
+    const paintSwitch = () => {
+      const home = state.user.home;
+      switchBar.innerHTML = '';
+      const homeBtn = h(`<button class="loc-chip ${mode === 'home' ? 'on' : ''}">🏠 ${esc(home?.name || t('Home'))}</button>`);
+      const curBtn = h(`<button class="loc-chip ${mode === 'current' ? 'on' : ''}">📍 ${esc(t('Current'))}</button>`);
+      homeBtn.onclick = () => {
+        if (!state.user.home) return setHomeHere();
+        mode = 'home'; paintSwitch();
+        M.view([state.user.home.lat, state.user.home.lng], 15);
+        nameEl.textContent = state.user.home.name || t('Home');
+      };
+      curBtn.onclick = () => { mode = 'current'; paintSwitch(); locate(true); };
+      switchBar.append(homeBtn, curBtn);
+      // A small "set this as home" affordance once we know where the device is.
+      if (lastHere) {
+        const set = h(`<button class="loc-chip ghost" title="${esc(t('Save current location as home'))}">${state.user.home ? '↻ ' + esc(t('Update home')) : '＋ ' + esc(t('Set home'))}</button>`);
+        set.onclick = setHomeHere;
+        switchBar.appendChild(set);
+      }
+    };
+    async function setHomeHere() {
+      if (!lastHere) { toast(t('Locating you first…'), ''); return; }
+      const geo = await reverseGeocode(lastHere[0], lastHere[1]);
+      try {
+        const { user } = await api.put('/api/auth/me/profile', { home: { lat: lastHere[0], lng: lastHere[1], name: geo?.neighborhood || null } });
+        state.user = user; toast(t('Home saved 🏠'), 'ok'); paintSwitch();
+      } catch (e) { toast(e.message, 'err'); }
+    }
+    function locate(recenter) {
+      if (!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const here = [pos.coords.latitude, pos.coords.longitude];
-        setYou(here);
-        if (!pins.length) M.view(here, Math.max(M.zoom(), 15)); // don't yank away from pins
+        lastHere = here; setYou(here);
+        if (recenter || !pins.length) M.view(here, Math.max(M.zoom(), 15));
         const geo = await reverseGeocode(here[0], here[1]);
-        if (geo?.neighborhood) nameEl.textContent = geo.neighborhood;
+        if (geo?.neighborhood && mode === 'current') nameEl.textContent = geo.neighborhood;
+        paintSwitch();
         api.put('/api/auth/me/location', { lat: here[0], lng: here[1], neighborhood: geo?.neighborhood || null })
           .then(({ user }) => { state.user = user; }).catch(() => {});
       }, () => { /* permission denied → keep profile location */ },
       { enableHighAccuracy: true, timeout: 8000 });
     }
+    paintSwitch();
+    locate(false);
   }).catch(() => mapFallback(el));
 
   return card;
@@ -1440,8 +1697,9 @@ function sidePanel() {
   // hydrate
   api.get('/api/stats/me').then((s) => {
     impact.querySelector('.impact-slot').innerHTML = `
-      <div class="stat"><span class="n">${s.acts}</span><span class="l">${esc(t('acts of care this season'))}</span></div>
-      <div class="bar"><i style="width:${Math.round(s.progress * 100)}%"></i></div>
+      <div class="stat"><span class="n">${s.pointsEarned ?? 0}</span><span class="l">${tf('points · Lv.{lv} {title}', { lv: s.level, title: esc(t(s.levelTitle)) })}</span></div>
+      <div class="bar level"><i style="width:${Math.round((s.levelProgress ?? 0) * 100)}%"></i></div>
+      ${s.nextTitle ? `<div class="lvl-next">${tf('{n} pts to {title}', { n: s.toNext, title: esc(t(s.nextTitle)) })}</div>` : `<div class="lvl-next">${esc(t('Top level reached ✦'))}</div>`}
       <div class="stat" style="margin-top:12px"><span class="n">${s.resolved}</span><span class="l">${tf('items you helped get {resolved}', { resolved: `<strong>${esc(t('resolved'))}</strong>` })}</span></div>`;
   }).catch(() => {});
   api.get('/api/stats/community').then((c) => {
@@ -1496,7 +1754,7 @@ function captureView() {
       <label class="upbtn">${ICONS.camera}${esc(t('Take a photo'))}<input type="file" accept="image/*" capture="environment" hidden></label>
       <label class="upbtn">${ICONS.video}${esc(t('Take a video'))}<input type="file" accept="video/*" capture="environment" hidden></label>
     </div>`);
-  up.querySelectorAll('input').forEach((inp) => inp.onchange = (e) => onFile(e.target.files[0]));
+  up.querySelectorAll('input').forEach((inp) => inp.onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; onFile(f); });
   wrap.appendChild(up);
   const geoEl = h(`<div class="geo-check hidden"></div>`);
   wrap.appendChild(geoEl);
@@ -1511,6 +1769,27 @@ function captureView() {
     b.classList.add('on'); draft.stream = b.dataset.s;
   });
   wrap.appendChild(pick);
+
+  // Emotion tag (⑦) + concern-group tags (⑥) — both optional, both attached to the post.
+  draft.mood = null; draft.groups = [];
+  const tagBlock = h(`<div class="tag-pickers">
+      <div class="tp-label">${esc(t('How does this make you feel?'))} <small>${esc(t('(optional)'))}</small></div>
+      <div class="mood-row">${MOODS.map((m) => `<button type="button" class="mood-chip" data-mood="${m.id}" title="${esc(t(m.label))}">${m.e}</button>`).join('')}</div>
+      <div class="tp-label">${esc(t('Whose needs does this speak for?'))} <small>${esc(t('(optional)'))}</small></div>
+      <div class="group-row">${CONCERN_GROUPS.map((g) => `<button type="button" class="group-chip" data-group="${g.id}">${g.e} ${esc(t(g.label))}</button>`).join('')}</div>
+    </div>`);
+  tagBlock.querySelectorAll('[data-mood]').forEach((b) => b.onclick = () => {
+    const sel = draft.mood === b.dataset.mood;
+    tagBlock.querySelectorAll('[data-mood]').forEach((x) => x.classList.remove('on'));
+    draft.mood = sel ? null : b.dataset.mood;
+    if (!sel) b.classList.add('on');
+  });
+  tagBlock.querySelectorAll('[data-group]').forEach((b) => b.onclick = () => {
+    const id = b.dataset.group;
+    if (draft.groups.includes(id)) { draft.groups = draft.groups.filter((x) => x !== id); b.classList.remove('on'); }
+    else if (draft.groups.length < 4) { draft.groups.push(id); b.classList.add('on'); }
+  });
+  wrap.appendChild(tagBlock);
 
   const form = h(`
     <div class="card">
@@ -1570,10 +1849,14 @@ function captureView() {
     }
   }
 
-  function onFile(file) {
-    if (!file) return;
+  async function onFile(original) {
+    if (!original) return;
+    const isVideo = original.type.startsWith('video');
+    // Let the neighbour crop stills before they land in the post; videos pass through.
+    const file = isVideo ? original : await cropImage(original);
+    if (!file) return; // crop cancelled
     draft.file = file;
-    draft.mediaType = file.type.startsWith('video') ? 'video' : 'photo';
+    draft.mediaType = isVideo ? 'video' : 'photo';
     const url = URL.createObjectURL(file);
     vf.querySelector('.placeholder')?.remove();
     vf.querySelectorAll('img,video').forEach((n) => n.remove());
@@ -1583,8 +1866,9 @@ function captureView() {
     refreshSubmit();
     if (draft.mediaType === 'photo') {
       autoDescribe(file); // vision only applies to stills
+      // GPS lives in the ORIGINAL file's EXIF — cropping re-encodes and strips it.
       draft.photoGps = null;
-      exifGps(file).then((g) => { draft.photoGps = g; verifyPhotoGeo(draft, geoEl, refreshSubmit); });
+      exifGps(original).then((g) => { draft.photoGps = g; verifyPhotoGeo(draft, geoEl, refreshSubmit); });
     } else {
       draft.photoGps = null; verifyPhotoGeo(draft, geoEl, refreshSubmit);
     }
@@ -1635,6 +1919,8 @@ function captureView() {
         lat: draft.coords?.lat ?? state.user.lat,
         lng: draft.coords?.lng ?? state.user.lng,
         placeName: draft.place || state.user.neighborhood || null,
+        mood: draft.mood,
+        groups: draft.groups,
       });
       // show what the AI decided
       const ai = form.querySelector('.ai-preview');
@@ -1682,9 +1968,10 @@ function postDetailView() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>
           ${p.ai?.tag ? `<span class="badge" style="background:var(--green-tint);color:var(--green)">${esc(p.ai.tag)}</span>` : ''}
-          ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(t(STATUS_LABEL[p.status]))}</span>` : ''}
+          ${p.stream === 'care' ? `<span class="badge" style="background:var(--paper-2);color:var(--ink-soft)">${esc(t(STATUS_LABEL[p.status] || p.status))}</span>` : ''}
+          ${(p.groups || []).map((id) => { const gg = groupOf(id); return gg ? `<span class="group-tag">${gg.e} ${esc(t(gg.label))}</span>` : ''; }).join('')}
         </div>
-        <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${esc(p.title)}</h2>
+        <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${moodOf(p.mood) ? moodOf(p.mood).e + ' ' : ''}${esc(p.title)}</h2>
         <div class="pmeta">📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })} · ${timeAgo(p.createdAt)}</div>
         ${far
           ? `<div class="modal-locked" style="margin-top:10px">🔒<div><b>${p.distanceM != null ? esc(tf('{d} away', { d: dist(p.distanceM) })) : esc(t('You’re not nearby'))}</b>
@@ -1704,13 +1991,22 @@ function postDetailView() {
     }
     slot.appendChild(card);
 
+    // resolution story (④) — the closed-loop narrative, shown first when present
+    if (p.story) slot.appendChild(h(`<div class="card story-card">
+        <div class="story-head">📖 ${esc(t('How this got solved'))}</div>
+        <p class="story-body">${esc(p.story)}</p>
+      </div>`));
+
     // action ladder for care
-    if (p.stream === 'care') slot.appendChild(actionLadder(p));
+    if (p.stream === 'care') {
+      if (p.status !== 'resolved') slot.appendChild(perspectiveCard(p));
+      slot.appendChild(actionLadder(p));
+    }
 
     // comments
     const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">${tf('Neighbour replies ({n})', { n: comments.length })}</h4></div>`);
     comments.forEach((c) => cbox.appendChild(h(`
-      <div class="comment"><div class="av">${esc(c.avatar || '·')}</div>
+      <div class="comment"><div class="av cartoon">${avatarMarkup({ name: c.author, avatar: c.avatar }, 30)}</div>
         <div><b>${esc(c.author)}</b> <span style="color:var(--ink-soft);font-size:11px">· ${timeAgo(c.createdAt)}</span>
         <p>${esc(c.body)}</p></div></div>`)));
     const cform = h(`<form class="comment-form"><input placeholder="${esc(t('Add an encouraging reply…'))}" maxlength="280"><button class="btn primary" style="width:auto;padding:10px 16px">${esc(t('Reply'))}</button></form>`);
@@ -1732,6 +2028,46 @@ function postDetailView() {
   return wrap;
 }
 
+/* Perspective-taking (⑤) — a collapsed reflection prompt under each Needs-Care item that
+ * invites the viewer to imagine the affected neighbour's experience before reacting. Builds
+ * empathy (the app's core value); the reflection is private by default and can be shared as a
+ * supportive reply. No backend: the draft is kept in the textarea; sharing posts a comment. */
+const PERSPECTIVE_QS = [
+  'If I lived right here, what would I notice first?',
+  'Who is most affected by this — and what do they need today?',
+  'What is one small thing I could do to help?',
+];
+function perspectiveCard(p) {
+  const box = h(`<div class="card perspective">
+      <button class="persp-head" type="button" aria-expanded="false">
+        <span>🫶 ${esc(t('Take a moment: see it from their side'))}</span><span class="chev">▾</span>
+      </button>
+      <div class="persp-body hidden">
+        <p class="persp-lead">${esc(t('Before you react, imagine you were the neighbour living with this.'))}</p>
+        <ul class="persp-qs">${PERSPECTIVE_QS.map((q) => `<li>${esc(t(q))}</li>`).join('')}</ul>
+        <textarea class="persp-input" rows="2" placeholder="${esc(t('Jot a thought — “If I were them, I’d need…”'))}"></textarea>
+        <button class="btn ghost persp-share" type="button">${esc(t('Share as a supportive reply'))}</button>
+      </div>
+    </div>`);
+  const head = box.querySelector('.persp-head');
+  const bodyEl = box.querySelector('.persp-body');
+  head.onclick = () => {
+    const open = bodyEl.classList.toggle('hidden');
+    head.setAttribute('aria-expanded', String(!open));
+    box.querySelector('.chev').textContent = open ? '▾' : '▴';
+  };
+  box.querySelector('.persp-share').onclick = async () => {
+    const txt = box.querySelector('.persp-input').value.trim();
+    if (!txt) { toast(t('Write a thought to share first'), ''); return; }
+    try {
+      await api.post(`/api/posts/${p.id}/comments`, { body: txt });
+      toast(t('Shared with your neighbour'), 'ok');
+      go(`post/${p.id}`);
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  return box;
+}
+
 function actionLadder(p) {
   const owner = p.author?.id === state.user.id;
   const box = h(`<div class="card">
@@ -1751,21 +2087,58 @@ function actionLadder(p) {
       ladder.appendChild(rung);
     });
 
+  // Closure-ladder progress strip (③) — where this item sits on its path to resolved.
+  const rung = ladderRung(p.status);
+  box.appendChild(h(`<div class="closure-strip">${CARE_LADDER.map((s, i) =>
+    `<div class="cs-step ${i < rung ? 'done' : i === rung ? 'now' : ''}"><span class="cs-dot"></span>${esc(t(s.label))}</div>`
+  ).join('<div class="cs-line"></div>')}</div>`));
+  if (p.claim) box.appendChild(h(`<div class="claim-line">${p.claim.official ? '🏢' : '🙋'} ${tf('Being handled by {name}', { name: esc(p.claim.name) })}${p.verify ? ` · ✓ ${tf('verified by {name}', { name: esc(p.verify.name) })}` : ''}</div>`));
+
   if (p.loop.length) {
     box.appendChild(h(`<div style="margin-top:14px">${renderLoopSteps(p.loop)}</div>`));
   }
 
-  if (owner && p.status !== 'resolved') {
-    const actions = h(`<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"></div>`);
-    const add = (label, action) => {
-      const b = h(`<button class="rbtn">${esc(label)}</button>`);
-      b.onclick = () => advance(p.id, action);
-      actions.appendChild(b);
-    };
-    if (p.ai?.action === 'city' && ['open', 'rallying'].includes(p.status)) add('↗ ' + t('Send report to city'), 'send_report');
-    if (['routed', 'rallying', 'open'].includes(p.status)) add('🛠 ' + t('Mark in progress'), 'in_progress');
-    add('✓ ' + t('Mark resolved'), 'resolve');
-    box.appendChild(actions);
+  // Step buttons, gated by the viewer's relationship to the item (server re-checks).
+  const u = state.user;
+  const handler = p.claim?.userId === u.id;
+  const official = u.role === 'official' && u.verified;
+  const actions = h(`<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"></div>`);
+  const add = (label, action, cls = 'rbtn') => {
+    const b = h(`<button class="${cls}">${esc(label)}</button>`);
+    b.onclick = () => advance(p.id, action);
+    actions.appendChild(b);
+  };
+  if (p.status !== 'resolved') {
+    // Anyone can claim an unclaimed item; the official tier and reporter can re-claim.
+    if (!p.claim && p.status !== 'pending_verify') add('🙋 ' + t('I’ll handle this'), 'claim', 'rbtn act');
+    if ((handler || owner || official) && p.status === 'claimed') add('🛠 ' + t('Submit the fix'), 'submit_fix', 'rbtn act');
+    if (p.status === 'pending_verify' && (!handler || owner || official)) add('✓ ' + t('Verify it’s resolved'), 'verify', 'rbtn act');
+    if (owner || official) {
+      if (p.ai?.action === 'city' && ['open', 'rallying', 'claimed'].includes(p.status)) add('↗ ' + t('Send report to city'), 'send_report');
+      add('✓ ' + t('Mark resolved'), 'resolve');
+    }
+  }
+  if (actions.children.length) box.appendChild(actions);
+
+  // Thanks (⑤) — once resolved, the reporter can thank helpers (costs 5 pts, +3 each helper).
+  if (owner && p.status === 'resolved') {
+    const thankWrap = h(`<div style="margin-top:14px"></div>`);
+    if (p.thankedByMe) {
+      thankWrap.appendChild(h(`<div class="thanks-done">💛 ${tf('You thanked your helpers · {n} sent', { n: p.thanks })}</div>`));
+    } else {
+      const tb = h(`<button class="rbtn thank-btn">💛 ${esc(t('Thank the neighbours who helped'))} <small>(−5 pts)</small></button>`);
+      tb.onclick = async () => {
+        tb.disabled = true;
+        try {
+          const { thanked } = await api.post(`/api/posts/${p.id}/thank`, {});
+          celebrate(tb, 'thanks');
+          toast(tf('Thanks sent to {n} neighbours 💛', { n: thanked }), 'ok');
+          setTimeout(() => go(`post/${p.id}`), 700);
+        } catch (e) { tb.disabled = false; toast(e.message, 'err'); }
+      };
+      thankWrap.appendChild(tb);
+    }
+    box.appendChild(thankWrap);
   }
   return box;
 }
@@ -1780,17 +2153,46 @@ function impactView() {
   Promise.all([api.get('/api/stats/me'), api.get('/api/posts?mine=1&sort=new')])
     .then(([s, mine]) => {
       slot.innerHTML = '';
+      const tiers = s.tiers || {};
+      const life = tiers.lifetime || { acts: s.acts, captured: s.captured, resolved: s.resolved, points: s.pointsEarned };
+      const season = tiers.season || { name: 'Season', acts: s.acts, goal: s.goal, progress: s.progress };
+      const month = tiers.month || { acts: s.acts };
+
+      // Level + badges header
+      slot.appendChild(h(`<div class="card level-card">
+          <div class="lvl-top"><div><div class="lvl-title">${esc(t('Lv.'))} ${s.level} · ${esc(t(s.levelTitle))}</div>
+            <div class="lvl-sub">${tf('{n} lifetime points', { n: s.pointsEarned })}</div></div>
+            <div class="lvl-pts">${s.points} <small>${esc(t('to spend'))}</small></div></div>
+          <div class="bar level"><i style="width:${Math.round((s.levelProgress ?? 1) * 100)}%"></i></div>
+          <div class="lvl-next">${s.nextTitle ? tf('{n} pts to {title}', { n: s.toNext, title: esc(t(s.nextTitle)) }) : esc(t('Top level reached ✦'))}</div>
+          ${(s.badges || []).length ? `<div class="badge-row">${s.badges.map((b) => badgeChip(b)).join('')}</div>` : ''}
+        </div>`));
+
+      // Tier 1 — lifetime (永久累计, never resets)
+      slot.appendChild(h(`<div class="tier-head">${esc(t('Lifetime'))} <span class="tier-note">${esc(t('never resets'))}</span></div>`));
       slot.appendChild(h(`<div class="statgrid">
-          <div class="bigstat"><div class="n">${s.acts}</div><div class="l">${esc(t('acts of care this season'))}</div></div>
-          <div class="bigstat good"><div class="n">${s.captured}</div><div class="l">${esc(t('observations you captured'))}</div></div>
-          <div class="bigstat care"><div class="n">${s.resolved}</div><div class="l">${esc(t('items you helped resolve'))}</div></div>
-          <div class="bigstat"><div class="n">${s.cheersReceived}</div><div class="l">${esc(t('cheers your posts received'))}</div></div>
+          <div class="bigstat"><div class="n">${life.acts}</div><div class="l">${esc(t('total acts of care'))}</div></div>
+          <div class="bigstat good"><div class="n">${life.captured}</div><div class="l">${esc(t('observations captured'))}</div></div>
+          <div class="bigstat care"><div class="n">${life.resolved}</div><div class="l">${esc(t('items resolved'))}</div></div>
+          <div class="bigstat"><div class="n">${s.cheersReceived}</div><div class="l">${esc(t('cheers received'))}</div></div>
         </div>`));
-      slot.appendChild(h(`<div class="card" style="margin-top:16px">
-          <h4 style="font-family:var(--display);margin-bottom:8px">${esc(t('Season goal'))}</h4>
-          <div class="stat"><span class="n">${s.acts}</span><span class="l">${tf('of {goal} acts', { goal: s.goal })}</span></div>
-          <div class="bar"><i style="width:${Math.round(s.progress * 100)}%"></i></div>
+
+      // Tier 2 — season (赛季, resets each quarter → earns a badge)
+      slot.appendChild(h(`<div class="tier-head">${tf('{name} season', { name: esc(t(season.name)) })} <span class="tier-note">${esc(t('resets each quarter · earns a badge'))}</span></div>`));
+      slot.appendChild(h(`<div class="card">
+          <div class="stat"><span class="n">${season.acts}</span><span class="l">${tf('of {goal} acts this season', { goal: season.goal })}</span></div>
+          <div class="bar"><i style="width:${Math.round((season.progress ?? 0) * 100)}%"></i></div>
         </div>`));
+
+      // Tier 3 — month (月度, rolling, resets monthly)
+      slot.appendChild(h(`<div class="tier-head">${esc(t('This month'))} <span class="tier-note">${esc(t('rolling · resets monthly'))}</span></div>`));
+      const taskList = s.tasks || [];
+      slot.appendChild(h(`<div class="statgrid two">
+          <div class="bigstat"><div class="n">${month.acts}</div><div class="l">${esc(t('acts this month'))}</div></div>
+          <div class="bigstat good"><div class="n">${taskList.filter((tk) => tk.done).length}/${taskList.length || 0}</div><div class="l">${esc(t('tasks done'))}</div></div>
+        </div>`));
+      if (taskList.length) slot.appendChild(taskChecklist(taskList));
+
       const list = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:10px">${esc(t('Your captures'))}</h4></div>`);
       const feed = h(`<div class="feed"></div>`);
       if (!mine.posts.length) feed.appendChild(h(`<div class="empty"><b>${esc(t('Nothing yet'))}</b>${esc(t('Capture the first thing on your block.'))}</div>`));
@@ -1801,31 +2203,62 @@ function impactView() {
   return wrap;
 }
 
+/* Community = Block Pulse (②) — one dashboard fusing the three E's: today's energy (collective
+ * efficacy), the latest solved stories (empathy), open issues needing help (a call to act), and
+ * the contribution ranking (intrapersonal recognition). */
 function communityView() {
-  const wrap = h(`<div style="max-width:820px;margin:0 auto"></div>`);
-  wrap.appendChild(h(`<div class="toprow"><h2>${esc(t('Community'))}<small>${esc(t('Collective efficacy — what the block does together'))}</small></h2></div>`));
+  const wrap = h(`<div style="max-width:860px;margin:0 auto"></div>`);
+  wrap.appendChild(h(`<div class="toprow"><h2>${esc(t('Block Pulse'))}<small>${esc(t('Your community’s energy station — live'))}</small></h2></div>`));
   const slot = h(`<div><div class="spinner"></div></div>`);
   wrap.appendChild(slot);
 
-  api.get('/api/stats/community').then((c) => {
-    slot.innerHTML = '';
-    slot.appendChild(h(`<div class="statgrid">
-        <div class="bigstat"><div class="n">${c.acts}</div><div class="l">${tf('acts across {n} neighbours', { n: c.neighbours })}</div></div>
-        <div class="bigstat good"><div class="n">${c.good}</div><div class="l">${esc(t('good things noticed'))}</div></div>
-        <div class="bigstat care"><div class="n">${c.care}</div><div class="l">${esc(t('care items flagged'))}</div></div>
-        <div class="bigstat"><div class="n">${c.resolved}</div><div class="l">${esc(t('issues closed together'))}</div></div>
-      </div>`));
-    slot.appendChild(h(`<div class="card" style="margin-top:16px;background:linear-gradient(150deg,var(--green-2),var(--green));color:#fff;border:0">
-        <div style="font-family:var(--display);font-weight:800;font-size:18px">${tf('↑ {pct}% more acts than last month', { pct: c.changePct })}</div>
-        <p style="color:#CFE0D7;font-size:13px;margin-top:4px">${esc(t("When neighbours can see shared effort, they do more of it. That's collective efficacy (Sampson et al., 1997)."))}</p>
-      </div>`));
-    const board = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:10px">${esc(t('Most active neighbours'))}</h4></div>`);
-    c.leaders.forEach((l, i) => board.appendChild(h(`
-      <div class="rung" style="margin-bottom:7px"><span class="k">${i + 1}</span>
-        <span>${esc(l.name_cjk ? l.name_cjk + ' · ' : '')}${esc(l.name)}</span>
-        <b style="margin-left:auto">${tf('{n} posts', { n: l.posts })}</b></div>`)));
-    slot.appendChild(board);
-  }).catch((e) => { slot.innerHTML = `<div class="empty"><b>${esc(t("Couldn't load"))}</b>${esc(e.message)}</div>`; });
+  Promise.all([api.get('/api/community/pulse'), api.get('/api/stats/community').catch(() => null)])
+    .then(([p, c]) => {
+      slot.innerHTML = '';
+
+      // Live pulse strip
+      slot.appendChild(h(`<div class="pulse-strip">
+          <div class="pulse-stat"><div class="n"><span class="pulse-dot"></span>${p.activeToday}</div><div class="l">${esc(t('active today'))}</div></div>
+          <div class="pulse-stat"><div class="n">${p.neighbours}</div><div class="l">${esc(t('neighbours'))}</div></div>
+          <div class="pulse-stat care"><div class="n">${p.openCount}</div><div class="l">${esc(t('open issues'))}</div></div>
+          <div class="pulse-stat good"><div class="n">${p.resolvedCount}</div><div class="l">${esc(t('resolved together'))}</div></div>
+        </div>`));
+
+      if (c) slot.appendChild(h(`<div class="card pulse-trend">
+          <div style="font-family:var(--display);font-weight:800;font-size:17px">${tf('↑ {pct}% more acts than last month', { pct: c.changePct })}</div>
+          <p>${esc(t("When neighbours can see shared effort, they do more of it. That's collective efficacy (Sampson et al., 1997)."))}</p>
+        </div>`));
+
+      // Latest solved stories (empathy)
+      const stories = h(`<div class="pulse-col"><h4 class="pulse-h">📖 ${esc(t('Latest solved stories'))}</h4></div>`);
+      if (!p.stories.length) stories.appendChild(h(`<p class="muted-note">${esc(t('No stories yet — close a care loop to write the first.'))}</p>`));
+      p.stories.forEach((s) => {
+        const cardEl = h(`<div class="story-mini"><b>${esc(s.title)}</b><p>${esc(s.story)}</p><small>📍 ${esc(s.placeName || t('Nearby'))}</small></div>`);
+        cardEl.onclick = () => go(`post/${s.id}`);
+        stories.appendChild(cardEl);
+      });
+      slot.appendChild(stories);
+
+      // Open issues that still need help (act)
+      const open = h(`<div class="pulse-col"><h4 class="pulse-h">🙌 ${esc(t('Needs a hand now'))}</h4></div>`);
+      if (!p.open.length) open.appendChild(h(`<p class="muted-note">${esc(t('Nothing open — the block is in good shape.'))}</p>`));
+      p.open.forEach((o) => {
+        const row = h(`<div class="open-row"><div><b>${esc(o.title)}</b><small>📍 ${esc(o.placeName || t('Nearby'))} · ${esc(t(STATUS_LABEL[o.status] || o.status))}</small></div>
+            <span class="open-tag ${o.claimed ? 'claimed' : ''}">${o.claimed ? esc(t('Being handled')) : esc(t('Unclaimed'))}</span></div>`);
+        row.onclick = () => go(`post/${o.id}`);
+        open.appendChild(row);
+      });
+      slot.appendChild(open);
+
+      // Contribution ranking (intrapersonal)
+      const board = h(`<div class="pulse-col"><h4 class="pulse-h">🏆 ${esc(t('Top contributors'))}</h4></div>`);
+      p.ranking.forEach((l, i) => board.appendChild(h(`
+        <div class="rank-row"><span class="k">${i + 1}</span>
+          <span class="av cartoon" style="width:30px;height:30px">${avatarMarkup(l, 30)}</span>
+          <span class="rank-name">${esc(l.nameCjk ? l.nameCjk + ' · ' : '')}${esc(l.name)}${l.official ? ` <span class="official-pin">🏢 ${esc(l.orgName || t('Official'))}</span>` : ''}</span>
+          <b class="rank-pts">${tf('{n} pts', { n: l.points })}</b></div>`)));
+      slot.appendChild(board);
+    }).catch((e) => { slot.innerHTML = `<div class="empty"><b>${esc(t("Couldn't load"))}</b>${esc(e.message)}</div>`; });
   return wrap;
 }
 
