@@ -27,7 +27,7 @@
   }
   .cjk{font-family:var(--display)}
 
-  .stage{position:fixed;inset:0}
+  .stage{position:fixed;inset:0;z-index:1}
   .scene{position:absolute;inset:0;display:grid;place-items:center;padding:6vh 5vw 15vh;
     opacity:0;pointer-events:none;transition:opacity .6s ease}
   .scene.active{opacity:1;pointer-events:auto}
@@ -117,7 +117,26 @@
   .btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;text-decoration:none;padding:13px 22px;border-radius:12px;cursor:pointer;border:0;font-family:var(--body)}
   .btn.primary{background:var(--good);color:#3a2a10} .btn.solid{background:#EAF1EC;color:var(--green)} .btn.ghost{background:transparent;color:#EAF1EC;border:1px solid rgba(255,255,255,.28)}
 
+  /* ── animated "living map" background ── */
+  .bg{position:fixed;inset:0;width:100%;height:100%;max-width:none;z-index:0;pointer-events:none}
+  .blob{mix-blend-mode:screen;opacity:.38}
+  .blob.b1{animation:drift1 30s ease-in-out infinite}
+  .blob.b2{animation:drift2 36s ease-in-out infinite}
+  .blob.b3{animation:drift3 26s ease-in-out infinite}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(70px,50px) scale(1.12)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-80px,44px) scale(1.08)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(46px,-60px) scale(1.16)}}
+  .gridlines{opacity:.14;animation:pan 26s linear infinite}
+  @keyframes pan{from{transform:translate(0,0)}to{transform:translate(64px,64px)}}
+  .ring{transform-box:fill-box;transform-origin:center;animation:pulse 3.4s ease-out infinite}
+  .pin2 .ring{animation-duration:4.3s;animation-delay:-1.6s}
+  .pin3 .ring{animation-duration:3.9s;animation-delay:-2.5s}
+  @keyframes pulse{0%{transform:scale(.5);opacity:.55}70%{opacity:0}100%{transform:scale(3);opacity:0}}
+  .pt{transform-box:fill-box;animation:mote var(--d,22s) linear infinite;animation-delay:var(--dl,0s);opacity:0}
+  @keyframes mote{0%{transform:translateY(30px);opacity:0}12%{opacity:.55}88%{opacity:.55}100%{transform:translateY(-150px);opacity:0}}
+
   @media (prefers-reduced-motion: reduce){
+    .bg .blob,.bg .gridlines,.bg .ring,.bg .pt{animation:none!important}
     .scene{transition:none}
     .scene .anim,.scene.active .anim{animation:none!important;opacity:1;transform:none}
     .draw{stroke-dashoffset:0!important;animation:none!important}
@@ -128,6 +147,43 @@
 </style>
 </head>
 <body>
+
+  <!-- animated "living map" background — drifting aurora, panning street grid, rising motes, pulsing pins -->
+  <svg class="bg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <filter id="bgsoft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="72"/></filter>
+      <pattern id="bggrid" width="64" height="64" patternUnits="userSpaceOnUse">
+        <path d="M64 0 H0 V64" fill="none" stroke="#8fb3a4" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <g filter="url(#bgsoft)">
+      <circle class="blob b1" cx="320" cy="230" r="250" fill="#2f6552"/>
+      <circle class="blob b2" cx="1170" cy="300" r="230" fill="#215446"/>
+      <circle class="blob b3" cx="740" cy="780" r="210" fill="#E2A02E"/>
+    </g>
+    <g class="gridlines"><rect x="-320" y="-320" width="2100" height="1560" fill="url(#bggrid)"/></g>
+    <g class="particles" fill="#EAF1EC">
+      <circle class="pt" cx="140" cy="700" r="2.4" style="--d:24s;--dl:-2s"/>
+      <circle class="pt" cx="270" cy="320" r="1.8" style="--d:19s;--dl:-9s"/>
+      <circle class="pt" cx="430" cy="760" r="2.2" style="--d:27s;--dl:-4s"/>
+      <circle class="pt" cx="520" cy="180" r="1.6" style="--d:21s;--dl:-14s"/>
+      <circle class="pt" cx="650" cy="520" r="2.6" style="--d:30s;--dl:-1s"/>
+      <circle class="pt" cx="760" cy="300" r="1.7" style="--d:18s;--dl:-7s"/>
+      <circle class="pt" cx="880" cy="700" r="2.3" style="--d:26s;--dl:-11s"/>
+      <circle class="pt" cx="980" cy="220" r="2" style="--d:23s;--dl:-3s"/>
+      <circle class="pt" cx="1080" cy="560" r="1.8" style="--d:20s;--dl:-16s"/>
+      <circle class="pt" cx="1190" cy="760" r="2.5" style="--d:28s;--dl:-6s"/>
+      <circle class="pt" cx="1300" cy="320" r="1.7" style="--d:22s;--dl:-12s"/>
+      <circle class="pt" cx="1360" cy="620" r="2.1" style="--d:25s;--dl:-8s"/>
+      <circle class="pt" cx="200" cy="520" r="1.9" style="--d:29s;--dl:-5s"/>
+      <circle class="pt" cx="600" cy="760" r="1.6" style="--d:17s;--dl:-13s"/>
+      <circle class="pt" cx="1000" cy="120" r="2.2" style="--d:24s;--dl:-10s"/>
+      <circle class="pt" cx="720" cy="120" r="1.8" style="--d:21s;--dl:-2s"/>
+    </g>
+    <g class="pin pin1" transform="translate(232 690)"><circle class="ring" r="9" fill="none" stroke="#E2A02E" stroke-width="2"/><circle r="4.5" fill="#E2A02E"/></g>
+    <g class="pin pin2" transform="translate(1210 650)"><circle class="ring" r="9" fill="none" stroke="#C0613A" stroke-width="2"/><circle r="4.5" fill="#C0613A"/></g>
+    <g class="pin pin3" transform="translate(1112 186)"><circle class="ring" r="9" fill="none" stroke="#3FAE6B" stroke-width="2"/><circle r="4.5" fill="#3FAE6B"/></g>
+  </svg>
 
   <div class="stage" id="stage">
 
@@ -326,12 +382,12 @@
     <!-- 10 · TRUST (22s) -->
     <section class="scene" data-dur="22">
       <div class="inner">
-        <div class="eyebrow anim">Why it's trustworthy</div>
-        <h2 class="anim d1">Built to keep working — and keep its promises.</h2>
+        <div class="eyebrow anim">Why it scales</div>
+        <h2 class="anim d1">Built to scale — and to keep its promises.</h2>
         <div class="trust">
-          <div class="tc anim d2"><b>Works with zero AI</b><span>No keys? Routing falls back to a transparent keyword heuristic. Fully functional, no black box required.</span></div>
-          <div class="tc anim d3"><b>No single provider</b><span>One gateway spans six vendors — swap one out in a line of config.</span></div>
-          <div class="tc anim d4"><b>Roles server-side</b><span>Elevated stewardship is never client-asserted; media never touches local disk.</span></div>
+          <div class="tc anim d2"><b>Low cost to run</b><span>Serverless on Cloud Run with a single bucket for storage — no database to operate, and capacity that follows demand.</span></div>
+          <div class="tc anim d3"><b>Zero-AI cost floor</b><span>The product works with no model spend at all — a keyword heuristic covers routing, so AI is an upgrade, never a dependency.</span></div>
+          <div class="tc anim d4"><b>No vendor lock-in</b><span>One gateway spans six LLM vendors — swap providers in a line of config as prices and models move.</span></div>
         </div>
       </div>
     </section>
@@ -374,9 +430,9 @@
     <!-- 13 · IMPACT (12s) -->
     <section class="scene" data-dur="12">
       <div class="inner">
-        <div class="eyebrow anim">The point of it</div>
-        <h2 class="anim d1">Turning <span class="accent">noticing</span> into agency —<br>one block at a time.</h2>
-        <p class="lead anim d2">For residents, neighbourhoods and cities alike — noticing becomes doing instead of frustration.</p>
+        <div class="eyebrow anim">The opportunity</div>
+        <h2 class="anim d1">One loop. <span class="accent">Three markets.</span></h2>
+        <p class="lead anim d2">The same engine serves neighbourhoods, city 311 intake and civic-education programs — a wedge that widens as blocks connect.</p>
       </div>
     </section>
 
