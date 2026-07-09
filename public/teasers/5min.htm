@@ -97,6 +97,14 @@
   .tc b{font-family:var(--display);font-size:15px;color:#fff;display:block;margin-bottom:5px}
   .tc span{font-size:13px;color:#BFD0C8}
 
+  /* four powers — Explore · Engage · Empower · Enact */
+  .four{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px;text-align:left}
+  @media(max-width:680px){.four{grid-template-columns:repeat(2,1fr)}}
+  .ec{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-top-width:3px;border-radius:12px;padding:14px 14px 13px}
+  .ec b{font-family:var(--display);font-size:16px;color:#fff;display:block;margin-bottom:4px}
+  .ec span{font-size:12.5px;color:#BFD0C8;line-height:1.5}
+  .ec.e1{border-top-color:#7FD4A2}.ec.e2{border-top-color:#E2A02E}.ec.e3{border-top-color:#f0c063}.ec.e4{border-top-color:#C0613A}
+
   /* ── HUD ── */
   .hud{position:fixed;left:0;right:0;bottom:0;padding:16px clamp(14px,5vw,40px) 20px;z-index:20;background:linear-gradient(0deg, rgba(11,26,20,.92), transparent)}
   .bar{height:4px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden}
@@ -208,8 +216,8 @@
       </div>
     </section>
 
-    <!-- 2 · PROBLEM (20s) -->
-    <section class="scene" data-dur="20">
+    <!-- 2 · PROBLEM (18s) -->
+    <section class="scene" data-dur="18">
       <div class="inner">
         <div class="eyebrow anim">The problem</div>
         <h2 class="anim d1">We notice things on our street every day —<br>and then <span class="accent-care">nothing happens</span>.</h2>
@@ -256,6 +264,37 @@
       </div>
     </section>
 
+    <!-- ✦ THE FOUR POWERS (24s) — Explore · Engage · Empower · Enact -->
+    <section class="scene" data-dur="24">
+      <div class="inner">
+        <div class="eyebrow anim">The power of the block</div>
+        <h2 class="anim d1">Explore. Engage. <span class="accent">Empower.</span> Enact.</h2>
+        <svg class="art sm anim d2" viewBox="0 0 640 214" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="epow" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stop-color="#7FD4A2"/><stop offset=".5" stop-color="#E2A02E"/><stop offset="1" stop-color="#C0613A"/>
+            </linearGradient>
+            <marker id="eah" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 Z" fill="#C0613A"/></marker>
+          </defs>
+          <path class="draw" style="--len:600" d="M64 172 L236 130 L408 86 L580 42" stroke="url(#epow)" stroke-width="4" stroke-linecap="round" marker-end="url(#eah)"/>
+          <circle class="pop p1" cx="64" cy="172" r="13" fill="#7FD4A2"/>
+          <circle class="pop p2" cx="236" cy="130" r="15" fill="#E2A02E"/>
+          <circle class="pop p3" cx="408" cy="86" r="17" fill="#f0c063"/>
+          <circle class="pop p4" cx="580" cy="42" r="20" fill="#C0613A"/>
+          <text class="pop p1" x="64" y="206" text-anchor="middle" font-size="15" fill="#fff" font-family="var(--display)" font-weight="800">Explore</text>
+          <text class="pop p2" x="236" y="164" text-anchor="middle" font-size="15" fill="#fff" font-family="var(--display)" font-weight="800">Engage</text>
+          <text class="pop p3" x="408" y="120" text-anchor="middle" font-size="15" fill="#fff" font-family="var(--display)" font-weight="800">Empower</text>
+          <text class="pop p4" x="580" y="18" text-anchor="middle" font-size="15" fill="#fff" font-family="var(--display)" font-weight="800">Enact</text>
+        </svg>
+        <div class="four">
+          <div class="ec e1 anim d2"><b>Explore</b><span>Notice your block — capture the good and what needs care, right where you stand.</span></div>
+          <div class="ec e2 anim d3"><b>Engage</b><span>Connect with neighbours — cheer, comment and rally the people nearby.</span></div>
+          <div class="ec e3 anim d4"><b>Empower</b><span>Grow real agency — every issue keeps a path, and your impact adds up.</span></div>
+          <div class="ec e4 anim d5"><b>Enact</b><span>Close the loop — act at the right rung until the fix is verified and told.</span></div>
+        </div>
+      </div>
+    </section>
+
     <!-- 4 · APP SNAP · MOBILE (26s) -->
     <section class="scene" data-dur="26">
       <div class="inner">
@@ -276,8 +315,8 @@
       </div>
     </section>
 
-    <!-- 5 · ACTION LADDER (30s) -->
-    <section class="scene" data-dur="30">
+    <!-- 5 · ACTION LADDER (22s) -->
+    <section class="scene" data-dur="22">
       <div class="inner">
         <div class="eyebrow anim">The central idea</div>
         <h2 class="anim d1">Every issue routed to the<br><span class="accent">lowest viable rung</span> of action.</h2>
@@ -294,8 +333,8 @@
       </div>
     </section>
 
-    <!-- 6 · HOW IT WORKS (26s) -->
-    <section class="scene" data-dur="26">
+    <!-- 6 · HOW IT WORKS (22s) -->
+    <section class="scene" data-dur="22">
       <div class="inner">
         <div class="eyebrow anim">How it works</div>
         <h2 class="anim d1">One loop that always keeps a path forward.</h2>
@@ -349,8 +388,8 @@
       </div>
     </section>
 
-    <!-- 9 · UNDER THE HOOD / ARCHITECTURE (28s) -->
-    <section class="scene" data-dur="28">
+    <!-- 9 · UNDER THE HOOD / ARCHITECTURE (22s) -->
+    <section class="scene" data-dur="22">
       <div class="inner">
         <div class="eyebrow anim">Under the hood</div>
         <h2 class="anim d1">Small stack, strong invariants.</h2>
@@ -407,8 +446,8 @@
       </div>
     </section>
 
-    <!-- 12 · REACH (20s) — SVG globe -->
-    <section class="scene" data-dur="20">
+    <!-- 12 · REACH (16s) — SVG globe -->
+    <section class="scene" data-dur="16">
       <div class="inner">
         <div class="eyebrow anim">Reach</div>
         <h2 class="anim d1">Every neighbourhood, in its own language.</h2>

@@ -64,7 +64,19 @@
   .grid{display:grid;gap:14px}
   .g2{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:820px){.g4{grid-template-columns:1fr 1fr}}
   @media(max-width:680px){.g2,.g3{grid-template-columns:1fr}}
+  @media(max-width:520px){.g4{grid-template-columns:1fr}}
+
+  /* the 4E spirit + body/mind/loved-ones */
+  .card.top{border-top-width:3px}
+  .card .tag{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:6px}
+  .e1{border-top-color:#3FAE6B} .e2{border-top-color:#E2A02E} .e3{border-top-color:#F0C063} .e4{border-top-color:#C0613A}
+  .c-body{color:#2F8F58} .c-mind{color:var(--good)} .c-love{color:var(--care)}
+  .wtags{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+  .wtag{font-size:11px;font-weight:700;border-radius:99px;padding:6px 12px;border:1px solid var(--line)}
+  .wtag.b{color:#2F8F58;border-color:#BEDDC9} .wtag.m{color:#B9791A;border-color:#EFD9A6} .wtag.l{color:#A64F2C;border-color:#EACab9}
 
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow-sm)}
   .card h3{font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:5px;display:flex;align-items:center;gap:8px}
@@ -127,6 +139,35 @@
     <div class="b"><b>17</b><span>UI LANGUAGES · AUTO-TRANSLATED</span></div>
     <div class="b"><b>0</b><span>BUILD STEPS · SHIPS AS-IS</span></div>
   </div>
+
+  <!-- THE SPIRIT · 4E -->
+  <section>
+    <h2>The spirit — Explore · Engage · Empower · Enact</h2>
+    <p class="sub">Four moves that turn a resident into a force — and make a block better for your <span class="c-body">body</span>, your <span class="c-mind">mind</span>, and the <span class="c-love">people you love</span>.</p>
+    <div class="grid g4">
+      <div class="card top e1">
+        <span class="tag c-body">Explore</span>
+        <p>Notice your block — one-tap capture of what's good or what needs care, right where you stand.</p>
+      </div>
+      <div class="card top e2">
+        <span class="tag" style="color:var(--good)">Engage</span>
+        <p>Connect with neighbours — cheer, comment and rally the people nearby who care about the same corner.</p>
+      </div>
+      <div class="card top e3">
+        <span class="tag" style="color:#B9791A">Empower</span>
+        <p>Grow real agency — every issue keeps a path, and your impact adds up through points and levels.</p>
+      </div>
+      <div class="card top e4">
+        <span class="tag c-love">Enact</span>
+        <p>Close the loop — act at the right rung until the fix is verified and the resolution story is told.</p>
+      </div>
+    </div>
+    <div class="wtags">
+      <span class="wtag b">Body — safer, greener, cared-for streets</span>
+      <span class="wtag m">Mind — belonging &amp; agency over helplessness</span>
+      <span class="wtag l">Loved ones — a block that looks out for your people</span>
+    </div>
+  </section>
 
   <!-- HOW IT WORKS -->
   <section>
@@ -283,7 +324,9 @@
   <footer>
     <span>优城美市 · Our Block — a place-based civic-wellbeing app. Numbers on this page are grounded in the codebase.</span>
     <span class="cta">
-      <a class="btn ghost" href="/teasers/about.html">Watch the teaser</a>
+      <a class="btn ghost" href="/4EOurBlock.html">The 4E presentation · 15 min</a>
+      <a class="btn ghost" href="/teasers/5min.htm">5-min tour</a>
+      <a class="btn ghost" href="/teasers/about.html">2-min teaser</a>
       <a class="btn" href="/">Open the app →</a>
     </span>
   </footer>
