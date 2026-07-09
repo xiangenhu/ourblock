@@ -1,0 +1,26 @@
+{
+  "name": "showcase",
+  "skill": "showcase",
+  "description": "Cinematic 120s teaser engine + factsheet scaffold (self-contained HTML)",
+  "requires": ["a static web root served ahead of any SPA catch-all"],
+  "copy": [
+    {
+      "id": "templates",
+      "from": "runtime/templates",
+      "to": "showcase-templates",
+      "files": ["teaser-template.html", "factsheet-template.html"]
+    }
+  ],
+  "wiring": [
+    "These are SCAFFOLDS, not finished pages. Two ways to finish them:",
+    "  A) Run the /showcase skill — it fills every {{PLACEHOLDER}} with content grounded in",
+    "     your codebase (verified counts, real features) and writes the final pages.",
+    "  B) Fill them by hand, then save to your web root:",
+    "       showcase-templates/factsheet-template.html  → <webroot>/factsheet.html",
+    "       showcase-templates/teaser-template.html      → <webroot>/teasers/about.html",
+    "",
+    "Rules: keep the teaser <style>/<script> engine verbatim; scene data-dur values must sum to 120;",
+    "keep the two closing CTA links (both paths must resolve); numbers must be verified against the repo;",
+    "inline CSS/JS only (no external CDNs). Confirm the static mount serves both paths before the SPA fallback."
+  ]
+}

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Our Block · 120-second teaser</title>
+<meta name="description" content="A two-minute cinematic tour of Our Block — notice the good, flag what needs care, act at the lowest viable rung.">
+<meta name="theme-color" content="#0b110e">
+<style>
+  :root{
+    --paper:#F4EFE4; --card:#FFFFFF;
+    --ink:#20251F; --ink-soft:#5C6157; --line:#E2DAC8;
+    --green:#234E3F; --green-2:#2F6552; --green-tint:#E4EDE6;
+    --good:#E2A02E; --good-tint:#FBEFD3; --care:#C0613A; --care-tint:#F6E1D5;
+    --display:system-ui,-apple-system,'Segoe UI','Helvetica Neue','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+    --body:system-ui,-apple-system,'Segoe UI','Helvetica Neue','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--body);color:#EAF1EC;overflow:hidden;
+    background:radial-gradient(1200px 700px at 20% -10%, #17352a 0%, transparent 55%),
+               radial-gradient(1000px 800px at 110% 10%, #10241c 0%, transparent 50%),
+               #0b110e;
+    -webkit-font-smoothing:antialiased;
+  }
+  .cjk{font-family:var(--display)}
+
+  /* stage */
+  .stage{position:fixed;inset:0;display:grid;place-items:center;padding:6vh 6vw 12vh}
+  .scene{position:absolute;inset:0;display:grid;place-items:center;padding:8vh 6vw 14vh;
+    opacity:0;pointer-events:none;transition:opacity .6s ease}
+  .scene.active{opacity:1;pointer-events:auto}
+  .inner{max-width:900px;width:100%;text-align:center}
+
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#9CBBAE;margin-bottom:20px}
+  h1{font-family:var(--display);font-weight:800;letter-spacing:-.015em;line-height:1.05;
+    font-size:clamp(30px,7vw,64px);color:#fff}
+  h1 .cjk{display:block;font-size:clamp(34px,8.5vw,78px);margin-bottom:6px}
+  h2{font-family:var(--display);font-weight:800;letter-spacing:-.01em;line-height:1.1;
+    font-size:clamp(26px,5.4vw,48px);color:#fff}
+  p.lead{font-size:clamp(16px,2.4vw,22px);color:#CBDCD3;margin-top:22px;max-width:44ch;margin-left:auto;margin-right:auto;font-weight:500}
+  .accent{color:var(--good)}
+  .accent-care{color:#E9B08E}
+
+  /* entrance animations — only while active */
+  .scene .anim{opacity:0;transform:translateY(18px)}
+  .scene.active .anim{animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards}
+  .scene.active .anim.d1{animation-delay:.12s}
+  .scene.active .anim.d2{animation-delay:.26s}
+  .scene.active .anim.d3{animation-delay:.42s}
+  .scene.active .anim.d4{animation-delay:.58s}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  .chips{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:26px}
+  .chip{font-size:13px;font-weight:700;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);
+    color:#EAF1EC;border-radius:99px;padding:9px 16px}
+
+  /* two streams */
+  .streams{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:28px;text-align:left}
+  @media(max-width:640px){.streams{grid-template-columns:1fr}}
+  .sc{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:20px}
+  .sc.good{border-left:5px solid var(--good)} .sc.care{border-left:5px solid var(--care)}
+  .sc b{font-family:var(--display);font-size:18px;color:#fff;display:block;margin-bottom:6px}
+  .sc span{font-size:14px;color:#BFD0C8}
+
+  /* ladder */
+  .ladder{display:grid;gap:12px;margin-top:26px;text-align:left;max-width:560px;margin-left:auto;margin-right:auto}
+  .rung{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:15px 18px}
+  .rung .n{font-family:var(--display);font-weight:800;font-size:20px;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:none;color:#fff}
+  .rung.self .n{background:#3FAE6B} .rung.rally .n{background:var(--good);color:#3a2a10} .rung.city .n{background:var(--care)}
+  .rung b{font-family:var(--display);font-size:16px;color:#fff} .rung span{display:block;font-size:13px;color:#BFD0C8}
+
+  /* stat grid */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:30px}
+  @media(max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat b{font-family:var(--display);font-weight:800;font-size:clamp(30px,6vw,52px);color:#fff;display:block;line-height:1}
+  .stat span{font-size:12px;color:#9CBBAE;font-weight:600;display:block;margin-top:8px;letter-spacing:.02em}
+
+  .flow{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:30px}
+  .step{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:16px 22px;font-family:var(--display);font-weight:800;font-size:clamp(18px,3vw,26px);color:#fff}
+  .arrow{color:var(--good);font-size:24px;font-weight:800}
+
+  .trust{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:28px;text-align:left}
+  @media(max-width:640px){.trust{grid-template-columns:1fr}}
+  .tc{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:18px}
+  .tc b{font-family:var(--display);font-size:15px;color:#fff;display:block;margin-bottom:5px}
+  .tc span{font-size:13px;color:#BFD0C8}
+
+  /* ── controls ── */
+  .hud{position:fixed;left:0;right:0;bottom:0;padding:16px clamp(14px,5vw,40px) 20px;z-index:20;
+    background:linear-gradient(0deg, rgba(6,10,8,.92), transparent)}
+  .bar{height:4px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--good),#f0c063);transition:width .1s linear}
+  .row{display:flex;align-items:center;gap:14px;margin-top:12px}
+  .dots{display:flex;gap:7px;flex:1;flex-wrap:wrap}
+  .dots button{width:11px;height:11px;border-radius:99px;border:0;background:rgba(255,255,255,.22);cursor:pointer;padding:0;transition:transform .15s,background .2s}
+  .dots button:hover{transform:scale(1.25)}
+  .dots button.on{background:var(--good);transform:scale(1.25)}
+  .pp{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;width:44px;height:44px;border-radius:12px;cursor:pointer;font-size:16px;display:grid;place-items:center;flex:none}
+  .pp:hover{background:rgba(255,255,255,.18)}
+  .clock{font-family:var(--display);font-weight:700;font-size:14px;color:#CBDCD3;font-variant-numeric:tabular-nums;flex:none;min-width:96px;text-align:right}
+
+  /* replay overlay */
+  .over{position:fixed;inset:0;z-index:30;display:none;place-items:center;padding:6vw;
+    background:radial-gradient(1000px 700px at 50% 30%, rgba(18,42,33,.97), rgba(8,13,10,.98))}
+  .over.show{display:grid}
+  .over .box{text-align:center;max-width:640px}
+  .over h2{margin-bottom:10px}
+  .over p{color:#CBDCD3;font-size:16px;margin-bottom:26px}
+  .over .acts{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:15px;text-decoration:none;padding:13px 22px;border-radius:12px;cursor:pointer;border:0;font-family:var(--body)}
+  .btn.primary{background:var(--good);color:#3a2a10}
+  .btn.solid{background:#EAF1EC;color:var(--green)}
+  .btn.ghost{background:transparent;color:#EAF1EC;border:1px solid rgba(255,255,255,.28)}
+
+  @media (prefers-reduced-motion: reduce){
+    .scene{transition:none}
+    .scene .anim,.scene.active .anim{animation:none!important;opacity:1;transform:none}
+    .bar>i{transition:none}
+  }
+</style>
+</head>
+<body>
+
+  <div class="stage" id="stage">
+
+    <!-- 1 · hook -->
+    <section class="scene" data-dur="8">
+      <div class="inner">
+        <div class="eyebrow anim">优城美市 · Our Block</div>
+        <h1 class="anim d1"><span class="cjk">你的街区</span>Your block, in good hands.</h1>
+        <p class="lead anim d2">Together.</p>
+      </div>
+    </section>
+
+    <!-- 2 · problem -->
+    <section class="scene" data-dur="12">
+      <div class="inner">
+        <div class="eyebrow anim">The problem</div>
+        <h2 class="anim d1">We notice things on our street every day —<br>and then <span class="accent-care">nothing happens</span>.</h2>
+        <p class="lead anim d2">A broken bench. A blooming corner. Most apps only collect complaints. The good goes unsaid, and the fixable feels like someone else's job.</p>
+      </div>
+    </section>
+
+    <!-- 3 · core idea -->
+    <section class="scene" data-dur="12">
+      <div class="inner">
+        <div class="eyebrow anim">The idea</div>
+        <h2 class="anim d1">Notice what's <span class="accent">good</span>.<br>Flag what <span class="accent-care">needs care</span>.</h2>
+        <div class="streams">
+          <div class="sc good anim d2"><b>The Good ✦</b><span>A space to savour and celebrate what neighbours do well. It never escalates — it just makes the good visible.</span></div>
+          <div class="sc care anim d3"><b>Needs Care △</b><span>Notice what needs attention, then act. Each item moves through a visible loop to a verified fix.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · central abstraction -->
+    <section class="scene" data-dur="14">
+      <div class="inner">
+        <div class="eyebrow anim">The central idea</div>
+        <h2 class="anim d1">Every issue routed to the<br><span class="accent">lowest viable rung</span> of action.</h2>
+        <div class="ladder">
+          <div class="rung self anim d2"><div class="n">1</div><div><b>Tend it yourself</b><span>Small enough to fix solo — share it so others can join.</span></div></div>
+          <div class="rung rally anim d3"><div class="n">2</div><div><b>Rally neighbours</b><span>Something a few people nearby can take on together.</span></div></div>
+          <div class="rung city anim d4"><div class="n">3</div><div><b>Send to the city</b><span>Drafts a report for the responsible agency.</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 · how it works -->
+    <section class="scene" data-dur="12">
+      <div class="inner">
+        <div class="eyebrow anim">How it works</div>
+        <h2 class="anim d1">One loop that always keeps a path forward.</h2>
+        <div class="flow">
+          <span class="step anim d2">Notice</span>
+          <span class="arrow anim d2">→</span>
+          <span class="step anim d3">Route</span>
+          <span class="arrow anim d3">→</span>
+          <span class="step anim d4">Act</span>
+        </div>
+        <p class="lead anim d4">One-tap capture with auto-GPS and a photo. An AI classifies it and suggests the smallest action that can actually resolve it.</p>
+      </div>
+    </section>
+
+    <!-- 6 · care loop -->
+    <section class="scene" data-dur="10">
+      <div class="inner">
+        <div class="eyebrow anim">The care loop closes</div>
+        <h2 class="anim d1">Report → handling → <span class="accent">verified fix</span> → story.</h2>
+        <p class="lead anim d2">A neighbour confirms the repair, the loop closes, and the resolution gets told — so effort turns into visible, shared progress.</p>
+      </div>
+    </section>
+
+    <!-- 7 · trustworthy -->
+    <section class="scene" data-dur="12">
+      <div class="inner">
+        <div class="eyebrow anim">Why it's trustworthy</div>
+        <h2 class="anim d1">Built to keep working — and keep its promises.</h2>
+        <div class="trust">
+          <div class="tc anim d2"><b>Works with zero AI</b><span>No keys? Routing falls back to a transparent keyword heuristic. Fully functional, no black box required.</span></div>
+          <div class="tc anim d3"><b>No single provider</b><span>Every model call flows through one gateway spanning six vendors — swap one out in a line of config.</span></div>
+          <div class="tc anim d4"><b>Roles server-side</b><span>Elevated stewardship is never client-asserted; media never touches local disk.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 · coverage (verified numbers) -->
+    <section class="scene" data-dur="12">
+      <div class="inner">
+        <div class="eyebrow anim">Coverage</div>
+        <h2 class="anim d1">Small stack. Wide reach.</h2>
+        <div class="stats">
+          <div class="stat anim d1"><b>3</b><span>ACTION RUNGS</span></div>
+          <div class="stat anim d2"><b>6</b><span>LLM VENDORS · 1 GATEWAY</span></div>
+          <div class="stat anim d3"><b>17</b><span>UI LANGUAGES</span></div>
+          <div class="stat anim d4"><b>0</b><span>BUILD STEPS</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9 · capabilities -->
+    <section class="scene" data-dur="12">
+      <div class="inner">
+        <div class="eyebrow anim">Under the hood</div>
+        <h2 class="anim d1">Lightweight, privacy-conscious, cloud-native.</h2>
+        <div class="chips">
+          <span class="chip anim d1">📍 Location-aware capture</span>
+          <span class="chip anim d1">📷 Photo + short video</span>
+          <span class="chip anim d2">🤖 AI action-router</span>
+          <span class="chip anim d2">🗄️ GCS-only storage</span>
+          <span class="chip anim d3">🗺️ Hybrid maps · Google · 高德 · Leaflet</span>
+          <span class="chip anim d3">🌍 Auto-translated i18n</span>
+          <span class="chip anim d4">🏅 Points · levels · badges</span>
+          <span class="chip anim d4">📊 xAPI learning analytics</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 · impact -->
+    <section class="scene" data-dur="10">
+      <div class="inner">
+        <div class="eyebrow anim">The point of it</div>
+        <h2 class="anim d1">Turning <span class="accent">noticing</span> into agency —<br>one block at a time.</h2>
+        <p class="lead anim d2">Because every observation keeps a viable next step, noticing becomes doing instead of frustration — for residents, neighbourhoods and cities alike.</p>
+      </div>
+    </section>
+
+    <!-- 11 · brand close -->
+    <section class="scene" data-dur="6">
+      <div class="inner">
+        <h1 class="anim"><span class="cjk">优城美市</span>Our Block</h1>
+        <p class="lead anim d1">Your block, in good hands — together.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- replay overlay -->
+  <div class="over" id="over">
+    <div class="box">
+      <div class="eyebrow">优城美市 · Our Block</div>
+      <h2>That's the loop.</h2>
+      <p>Notice the good, flag what needs care, and act at the lowest viable rung.</p>
+      <div class="acts">
+        <button class="btn primary" id="replay">↻ Replay</button>
+        <a class="btn ghost" href="/factsheet.html">Read the fact sheet</a>
+        <a class="btn solid" href="/">Open the app →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="bar"><i id="fill"></i></div>
+    <div class="row">
+      <button class="pp" id="pp" aria-label="Play or pause">❚❚</button>
+      <div class="dots" id="dots"></div>
+      <div class="clock" id="clock">0:00 / 2:00</div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var scenes = Array.prototype.slice.call(document.querySelectorAll('.scene'));
+  var durs = scenes.map(function(s){ return parseFloat(s.getAttribute('data-dur')) || 0; });
+  var TOTAL = durs.reduce(function(a,b){ return a + b; }, 0); // computed from the DOM
+  var starts = []; // cumulative start time of each scene
+  (function(){ var acc = 0; for (var i=0;i<durs.length;i++){ starts.push(acc); acc += durs[i]; } })();
+
+  var fill = document.getElementById('fill');
+  var clock = document.getElementById('clock');
+  var ppBtn = document.getElementById('pp');
+  var dotsWrap = document.getElementById('dots');
+  var over = document.getElementById('over');
+
+  var idx = 0;          // active scene
+  var sceneElapsed = 0; // seconds within the active scene
+  var playing = true;
+  var ended = false;
+  var lastTs = null;
+
+  // build dots
+  var dots = scenes.map(function(_, i){
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', 'Scene ' + (i+1));
+    b.addEventListener('click', function(){ seekScene(i); });
+    dotsWrap.appendChild(b);
+    return b;
+  });
+
+  function fmt(t){
+    t = Math.max(0, Math.min(TOTAL, t));
+    var m = Math.floor(t / 60);
+    var s = Math.floor(t % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function globalTime(){ return starts[idx] + sceneElapsed; }
+
+  function render(){
+    scenes.forEach(function(s, i){ s.classList.toggle('active', i === idx); });
+    dots.forEach(function(d, i){ d.classList.toggle('on', i === idx); });
+    var gt = globalTime();
+    fill.style.width = (TOTAL ? (gt / TOTAL * 100) : 0) + '%';
+    clock.textContent = fmt(gt) + ' / ' + fmt(TOTAL);
+  }
+
+  function showScene(i){
+    idx = Math.max(0, Math.min(scenes.length - 1, i));
+    sceneElapsed = 0;
+    render();
+  }
+
+  function seekScene(i){
+    ended = false;
+    over.classList.remove('show');
+    showScene(i);
+    if (!playing) setPlaying(true);
+  }
+
+  function finish(){
+    ended = true;
+    playing = false;
+    ppBtn.textContent = '▶';
+    idx = scenes.length - 1;
+    sceneElapsed = durs[idx];
+    fill.style.width = '100%';
+    clock.textContent = fmt(TOTAL) + ' / ' + fmt(TOTAL);
+    over.classList.add('show');
+  }
+
+  function setPlaying(p){
+    if (ended && p){ // restart from beginning
+      ended = false;
+      over.classList.remove('show');
+      showScene(0);
+    }
+    playing = p;
+    ppBtn.textContent = p ? '❚❚' : '▶';
+    if (p){ lastTs = null; requestAnimationFrame(tick); }
+  }
+
+  function tick(ts){
+    if (!playing) return;
+    if (lastTs == null) lastTs = ts;
+    var dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+    // clamp big gaps (tab was backgrounded) so we don't skip scenes
+    if (dt > 0.5) dt = 0.5;
+    sceneElapsed += dt;
+    while (sceneElapsed >= durs[idx]){
+      if (idx >= scenes.length - 1){ finish(); return; }
+      sceneElapsed -= durs[idx];
+      idx++;
+    }
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  ppBtn.addEventListener('click', function(){ setPlaying(!playing); });
+  document.getElementById('replay').addEventListener('click', function(){ seekScene(0); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.code === 'Space'){ e.preventDefault(); setPlaying(!playing); }
+    else if (e.code === 'ArrowRight'){ e.preventDefault(); seekScene(Math.min(scenes.length - 1, idx + 1)); }
+    else if (e.code === 'ArrowLeft'){ e.preventDefault(); seekScene(Math.max(0, idx - 1)); }
+  });
+
+  // start
+  showScene(0);
+  setPlaying(true);
+})();
+</script>
+</body>
+</html>

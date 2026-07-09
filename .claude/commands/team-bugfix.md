@@ -100,3 +100,13 @@ Options: "errors" | "client" | "server" | "<keyword e.g. quiz>" | "install" | "a
 - GCS-only persistence (fix log): `@.claude/commands/_shared/storage-invariants.md`
 - Roles (Admin-only surfaces): `@.claude/commands/_shared/roles.md`
 - Related: `/team-incident` (live firefighting) · `/team-xapi` · `/team-privacy` · `/team-gcs` · `/team-refactor`
+
+## Installable runtime (transfer to another app)
+The capture runtime (client + server bugReporter, the bug-report routes, and the CLI triage tool) is
+packaged as a kit — with a **self-contained** server reporter (no vendored backbone needed):
+
+> **Kit:** `@.claude/commands/_shared/bugfix-kit/` (see its `README.md`).
+> `node .claude/commands/_shared/kits/install.mjs bugfix --app <dir>` copies `bugReporter.js`
+> (client + standalone server), `bugReportRoutes.js`, and `bug-triage.js`, and prints the wiring
+> (initBugReporter; middleware + process handlers; mount routes; `BUG_LRS_*` env). Canonical design
+> spec: `@.claude/commands/_shared/BUG_TRACKING_AND_FIXING.md`. Kit index: `_shared/kits/README.md`.

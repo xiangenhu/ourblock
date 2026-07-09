@@ -1,0 +1,211 @@
+/* Translation Suggestion Mode — teacher/admin tool for crowd-correcting i18n.
+   Only mounts when the display language differs from English. */
+
+/* Floating toggle pill (bottom-left; help chrome owns bottom-right) */
+.i18n-suggest-toggle {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 2147483000;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.i18n-suggest-toggle:hover { box-shadow: 0 3px 14px rgba(0, 0, 0, 0.22); }
+.i18n-suggest-toggle.is-active {
+  background: #f59e0b;
+  color: #1f2937;
+  border-color: #d97706;
+}
+
+/* When active, outline every translatable string so it's obvious what's clickable */
+body.i18n-suggest-active [data-i18n] {
+  outline: 1px dashed rgba(245, 158, 11, 0.7);
+  outline-offset: 2px;
+  cursor: help;
+  border-radius: 2px;
+}
+body.i18n-suggest-active [data-i18n]:hover {
+  outline-style: solid;
+  background: rgba(245, 158, 11, 0.14);
+}
+/* Never outline the tool's own chrome */
+body.i18n-suggest-active [data-suggest-ui] [data-i18n] {
+  outline: none !important;
+  cursor: default;
+  background: none;
+}
+
+/* Modal */
+.i18n-suggest-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.5);
+}
+.i18n-suggest-modal {
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #ffffff;
+  color: #1f2937;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  padding: 1.25rem 1.4rem;
+}
+.i18n-suggest-modal h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.15rem;
+}
+.i18n-suggest-lang {
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-bottom: 0.9rem;
+}
+.i18n-suggest-field { margin-bottom: 0.85rem; }
+.i18n-suggest-field label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  margin-bottom: 0.3rem;
+}
+.i18n-suggest-readonly {
+  padding: 0.5rem 0.65rem;
+  background: #f3f4f6;
+  border-radius: 0.4rem;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.i18n-suggest-textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+}
+.i18n-suggest-textarea:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+}
+/* AI suggestion controls */
+.i18n-suggest-ai {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.i18n-suggest-ai-btn {
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.4rem;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #4b5563;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.i18n-suggest-ai-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #a5b4fc;
+  color: #4338ca;
+}
+.i18n-suggest-ai-btn:disabled { opacity: 0.6; cursor: progress; }
+.i18n-suggest-alts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+.i18n-suggest-alts-hint {
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+.i18n-suggest-alt {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: pre-wrap;
+  word-break: break-word;
+  transition: background 0.15s, border-color 0.15s;
+}
+.i18n-suggest-alt:hover { background: #eef2ff; border-color: #a5b4fc; }
+.i18n-suggest-alt.is-selected { border-color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+
+.i18n-suggest-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.i18n-suggest-btn {
+  padding: 0.45rem 0.95rem;
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.i18n-suggest-btn.secondary {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+.i18n-suggest-btn.primary {
+  background: #f59e0b;
+  color: #1f2937;
+}
+.i18n-suggest-btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.i18n-suggest-msg {
+  font-size: 0.82rem;
+  margin-top: 0.6rem;
+}
+.i18n-suggest-msg.ok { color: #059669; }
+.i18n-suggest-msg.err { color: #dc2626; }
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+  .i18n-suggest-toggle { background: #1f2937; color: #f3f4f6; border-color: rgba(255,255,255,0.15); }
+  .i18n-suggest-modal { background: #1f2937; color: #f3f4f6; }
+  .i18n-suggest-readonly { background: #374151; }
+  .i18n-suggest-textarea { background: #111827; color: #f3f4f6; border-color: #4b5563; }
+  .i18n-suggest-btn.secondary { background: #374151; color: #f3f4f6; border-color: #4b5563; }
+  .i18n-suggest-ai-btn { background: #374151; color: #e5e7eb; border-color: #4b5563; }
+  .i18n-suggest-ai-btn:hover:not(:disabled) { background: #4338ca; border-color: #6366f1; color: #eef2ff; }
+  .i18n-suggest-alt { background: #111827; color: #f3f4f6; border-color: #4b5563; }
+  .i18n-suggest-alt:hover { background: #312e81; border-color: #6366f1; }
+  .i18n-suggest-alt.is-selected { background: rgba(245, 158, 11, 0.2); border-color: #f59e0b; }
+}

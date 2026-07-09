@@ -1,0 +1,77 @@
+{
+  "name": "bugfix",
+  "skill": "team-bugfix",
+  "description": "Self-contained bug tracking: client+server error capture → BUG_LRS (xAPI verb: failed) + CLI triage",
+  "requires": [
+    "BUG_LRS_ENDPOINT",
+    "BUG_LRS_USERNAME",
+    "BUG_LRS_PASSWORD",
+    "BUG_APP_ID (optional — isolates this app's bugs in a shared LRS; defaults to 'default')"
+  ],
+  "copy": [
+    {
+      "id": "client",
+      "from": "runtime/client",
+      "to": "client/src/utils",
+      "files": ["bugReporter.js"]
+    },
+    {
+      "id": "server",
+      "from": "runtime/server",
+      "to": "server/services",
+      "files": ["bugReporter.js"]
+    },
+    {
+      "id": "routes",
+      "from": "runtime/server",
+      "to": "server/routes",
+      "files": ["bugReportRoutes.js"]
+    },
+    {
+      "id": "scripts",
+      "from": "runtime/scripts",
+      "to": "scripts",
+      "files": ["bug-triage.js"]
+    }
+  ],
+  "wiring": [
+    "1. Client — capture errors at startup (client/src/main.jsx, once):",
+    "     import { initBugReporter } from './utils/bugReporter';",
+    "     initBugReporter();   // installs window.error / unhandledrejection / console.error+warn hooks",
+    "   Manual reports anywhere: import { reportError, reportCaughtError } from './utils/bugReporter';",
+    "",
+    "2. Server — the copied server/services/bugReporter.js is an ADAPTER. In the source app it",
+    "   re-exports '../../runtime/src/bug/reporter' (the @uals/skill-runtime backbone). Your app",
+    "   almost certainly has no such module, so pick ONE:",
+    "     (a) point the adapter's require(...) at YOUR server implementation, or",
+    "     (b) replace it with an implementation exposing the same 4 fns:",
+    "         reportError, bugReporterMiddleware, attachProcessHandlers, isConfigured.",
+    "   The backbone builds an xAPI statement (verb http://adlnet.gov/expapi/verbs/failed), tags it",
+    "   with BUG_APP_ID, dedups (1-min TTL), and POSTs to BUG_LRS. See README for the exact contract.",
+    "",
+    "3. Server — wire the backbone into Express (server.js):",
+    "     const { bugReporterMiddleware, attachProcessHandlers } = require('./services/bugReporter');",
+    "     attachProcessHandlers();          // uncaughtException / unhandledRejection / console capture",
+    "     // ...after ALL routes are registered:",
+    "     app.use(bugReporterMiddleware);   // Express error middleware (4-arg) — mount LAST",
+    "",
+    "4. Server — mount the bug-report API (server.js), reusing your auth middleware:",
+    "     const { createBugReportRoutes } = require('./routes/bugReportRoutes');",
+    "     app.use('/server/telemetry', createBugReportRoutes({",
+    "       bugReporter: require('./services/bugReporter'),",
+    "       optionalAuth, requireAdmin,",
+    "     }));",
+    "   → POST /server/telemetry/bug-report (public)  ·  GET /server/telemetry/bug-reports (admin)",
+    "   Keep the POST path in sync with the client reporter's ENDPOINT ('/server/telemetry/bug-report').",
+    "",
+    "5. package.json — add triage scripts:",
+    "     \"bugs\":      \"node scripts/bug-triage.js\",",
+    "     \"debugging\": \"node scripts/bug-triage.js\"",
+    "",
+    "6. (Optional) Admin dashboard — add a 'Bug Reports' tab that GETs /server/telemetry/bug-reports",
+    "   with ?range=7d and renders summary + expandable list (see README / your AdminDashboard).",
+    "",
+    "Reporters no-op SILENTLY when BUG_LRS_* env is absent (local dev). Full spec: this kit's README.md",
+    "and @.claude/commands/_shared/BUG_TRACKING_AND_FIXING.md."
+  ]
+}

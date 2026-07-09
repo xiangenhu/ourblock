@@ -1,0 +1,43 @@
+{
+  "name": "i18n",
+  "skill": "team-i18n",
+  "description": "Hash-based i18n: client runtime + server routes + on-demand translation + Suggestion Mode",
+  "requires": ["GCS_BUCKET_NAME", "an LLM provider (optional, for on-demand /translate)"],
+  "copy": [
+    {
+      "id": "client",
+      "from": "runtime/client",
+      "to": "client/src/i18n",
+      "files": ["hashUtils.js", "i18nUtils.js", "I18nContext.jsx", "I18nText.jsx", "SuggestionMode.jsx", "SuggestionMode.css", "index.js"],
+      "optionalFiles": { "AdminTranslationsTab.jsx": "admin-tab" }
+    },
+    {
+      "id": "server",
+      "from": "runtime/server",
+      "to": "server/i18n",
+      "files": ["i18nRoutes.js"]
+    },
+    {
+      "id": "locales",
+      "from": "runtime/locales",
+      "to": "client/public/locales",
+      "files": ["en.json"],
+      "seedOnly": true
+    }
+  ],
+  "wiring": [
+    "1. Client — wrap the app once (main.jsx):",
+    "     import { I18nProvider } from './i18n';  <I18nProvider><App/></I18nProvider>",
+    "2. Client — render text: import { I18nText } from './i18n';  <I18nText>Save</I18nText>",
+    "3. Client — mount the tool once (inside your auth provider):",
+    "     import { SuggestionMode } from './i18n';",
+    "     <SuggestionMode canUse={isTeacher()||isAdmin()} getAuthHeaders={()=>({Authorization:`Bearer ${token}`})} />",
+    "4. Server — mount the router once (server.js):",
+    "     const { createI18nRouter } = require('./i18n/i18nRoutes');",
+    "     app.use('/server/i18n', createI18nRouter({ storage, requireTeacher, requireAdmin, llmTranslate, localesFsPath }));",
+    "5. Client api.js — add 4 wrappers: submit/get/approve/rejectTranslationSuggestion (see README).",
+    "6. Admin (with --admin-tab) — add AdminTranslationsTab as a dashboard tab.",
+    "",
+    "Activates only when display language != 'en'. Endpoints 503 without GCS."
+  ]
+}

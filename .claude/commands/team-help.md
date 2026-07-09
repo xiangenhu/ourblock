@@ -108,3 +108,12 @@ Options: "install" | "audit" | "wire-server" | "tts" | "analytics" | "tag <area>
 - All model calls go through the single gateway (language + accounting centralized): `@.claude/commands/_shared/llm-gateway.md`
 
 - Learning-first UX (entry jargon, focus over density, in-place LLM help, tabs/modals): `@.claude/commands/_shared/learning-ux.md`
+
+## Installable runtime (transfer to another app)
+The drop-in runtime (client `contextual-help.js` + Express `help.js`/`helpStore.js`) is packaged as a kit:
+
+> **Kit:** `@.claude/commands/_shared/help-kit/` (see its `README.md`).
+> `node .claude/commands/_shared/kits/install.mjs help --app <dir>` copies the runtime and prints the
+> wiring/swap-slots (repoint the two `require` paths; supply storage/llmGateway/auth). The canonical
+> **design** spec remains `@.claude/commands/_shared/CONTEXT_HELP.md`; the kit is the install layer on
+> top of it. Kit index: `_shared/kits/README.md`.

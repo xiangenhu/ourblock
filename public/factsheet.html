@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fact Sheet · 优城美市 Our Block</title>
+<meta name="description" content="Our Block fact sheet — a place-based civic-wellbeing app where neighbours notice the good, flag what needs care, and are routed to the lowest viable rung of action.">
+<meta name="theme-color" content="#234E3F">
+<style>
+  :root{
+    --paper:#F4EFE4; --paper-2:#EDE6D6; --card:#FFFFFF;
+    --ink:#20251F; --ink-soft:#5C6157; --line:#E2DAC8;
+    --green:#234E3F; --green-2:#2F6552; --green-tint:#E4EDE6;
+    --good:#E2A02E; --good-tint:#FBEFD3; --care:#C0613A; --care-tint:#F6E1D5;
+    --shadow:0 18px 40px -22px rgba(35,40,30,.45);
+    --shadow-sm:0 8px 20px -14px rgba(35,40,30,.5);
+    --r:18px;
+    /* Self-hosted system stacks — no network font fetch. */
+    --display:system-ui,-apple-system,'Segoe UI','Helvetica Neue','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+    --body:system-ui,-apple-system,'Segoe UI','Helvetica Neue','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:var(--body);color:var(--ink);line-height:1.6;
+    background:
+      radial-gradient(1200px 600px at 12% -8%, #FBF6EC 0%, transparent 55%),
+      radial-gradient(900px 700px at 110% 0%, #EFEAD9 0%, transparent 50%),
+      var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  .cjk{font-family:var(--display)}
+  a{color:var(--green-2)}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 22px 72px}
+
+  /* ── hero ── */
+  .hero{
+    background:linear-gradient(150deg,var(--green) 0%,#1c3f33 100%);
+    color:#EAF1EC;border-radius:var(--r);padding:36px 34px;box-shadow:var(--shadow);
+    position:relative;overflow:hidden;
+  }
+  .hero::after{content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;
+    background:radial-gradient(circle,rgba(226,160,46,.28),transparent 65%);border-radius:99px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#9CBBAE;margin-bottom:12px}
+  .hero h1{font-family:var(--display);font-weight:800;font-size:34px;line-height:1.08;color:#fff;letter-spacing:-.01em}
+  .hero h1 .cjk{display:block;font-size:40px;margin-bottom:4px}
+  .hero p.tag{font-size:16px;color:#CBDCD3;margin-top:14px;font-weight:500;max-width:60ch}
+  .hero .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;position:relative;z-index:1}
+  .chip{font-size:11.5px;font-weight:700;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    color:#EAF1EC;border-radius:99px;padding:6px 13px}
+
+  /* ── stat band ── */
+  .band{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:20px}
+  @media(max-width:680px){.band{grid-template-columns:repeat(2,1fr)}}
+  .b{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;box-shadow:var(--shadow-sm)}
+  .b b{font-family:var(--display);font-weight:800;font-size:26px;color:var(--green);display:block;line-height:1}
+  .b span{font-size:11.5px;color:var(--ink-soft);font-weight:600;display:block;margin-top:6px}
+
+  /* ── sections ── */
+  section{margin-top:34px}
+  h2{font-family:var(--display);font-weight:800;font-size:20px;letter-spacing:-.01em;margin-bottom:4px}
+  h2 .num{color:var(--good);margin-right:8px}
+  .sub{color:var(--ink-soft);font-size:13px;margin-bottom:16px}
+
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:680px){.g2,.g3{grid-template-columns:1fr}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow-sm)}
+  .card h3{font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:5px;display:flex;align-items:center;gap:8px}
+  .card p{font-size:13px;color:var(--ink-soft)}
+  .card p+p{margin-top:8px}
+  .dot{width:10px;height:10px;border-radius:99px;flex:none}
+  .dot.good{background:var(--good)} .dot.care{background:var(--care)}
+
+  /* stream cards */
+  .stream{border-left:5px solid var(--line)}
+  .stream.good{border-left-color:var(--good);background:linear-gradient(180deg,var(--good-tint),var(--card) 60%)}
+  .stream.care{border-left-color:var(--care);background:linear-gradient(180deg,var(--care-tint),var(--card) 60%)}
+
+  /* action ladder */
+  .ladder{display:grid;gap:10px}
+  .rung{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 16px;box-shadow:var(--shadow-sm)}
+  .rung .n{font-family:var(--display);font-weight:800;font-size:18px;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:none;color:#fff}
+  .rung.self .n{background:#3FAE6B} .rung.rally .n{background:var(--good);color:#3a2a10} .rung.city .n{background:var(--care)}
+  .rung b{font-family:var(--display);font-size:14px}
+  .rung span{display:block;font-size:12.5px;color:var(--ink-soft)}
+
+  /* mechanism table */
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow-sm)}
+  th,td{text-align:left;padding:12px 16px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--green-tint);color:var(--green);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  td:first-child{font-weight:700;color:var(--ink);width:42%}
+  td.mech{color:var(--ink-soft)}
+  tr:last-child td{border-bottom:0}
+
+  /* stack pills */
+  .stack{display:flex;gap:8px;flex-wrap:wrap}
+  .stack .s{font-size:12px;font-weight:700;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 14px;color:var(--ink)}
+  .stack .s small{color:var(--ink-soft);font-weight:500}
+
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  .cta{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{display:inline-block;background:var(--green);color:#fff;font-weight:700;font-size:13px;text-decoration:none;padding:10px 18px;border-radius:10px;box-shadow:var(--shadow-sm)}
+  .btn.ghost{background:transparent;color:var(--green);border:1px solid var(--line);box-shadow:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Fact Sheet · Civic Wellbeing</div>
+    <h1><span class="cjk">优城美市</span>Our Block</h1>
+    <p class="tag">Your block, in good hands — together. A place-based app where residents notice what is <strong>good</strong>, flag what <strong>needs care</strong>, and are routed by an AI to the lowest viable rung of action.</p>
+    <div class="chips">
+      <span class="chip">📍 Location-aware capture</span>
+      <span class="chip">📷 Photo + short video</span>
+      <span class="chip">🤖 AI action-router</span>
+      <span class="chip">🌍 Multilingual</span>
+    </div>
+  </header>
+
+  <!-- STAT BAND (verified against the repo) -->
+  <div class="band">
+    <div class="b"><b>3</b><span>RUNGS ON THE ACTION LADDER</span></div>
+    <div class="b"><b>6</b><span>LLM VENDORS · ONE GATEWAY</span></div>
+    <div class="b"><b>17</b><span>UI LANGUAGES · AUTO-TRANSLATED</span></div>
+    <div class="b"><b>0</b><span>BUILD STEPS · SHIPS AS-IS</span></div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <section>
+    <h2>How it works</h2>
+    <p class="sub">Notice → Route → Act — a single loop that always keeps a path forward.</p>
+    <div class="grid g3">
+      <div class="card">
+        <h3>👀 Notice</h3>
+        <p>One-tap capture with auto-GPS, a photo or a short video — evidence-rich, situated awareness of the block you live on.</p>
+      </div>
+      <div class="card">
+        <h3>🧭 Route</h3>
+        <p>An AI classifies each observation and suggests the <em>lowest viable rung</em> of action, so every issue keeps a concrete next step.</p>
+      </div>
+      <div class="card">
+        <h3>🌱 Act</h3>
+        <p>Tend it yourself, rally neighbours, or send a report to the city — then watch the care loop close and the story get told.</p>
+      </div>
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      <div class="card stream good">
+        <h3><span class="dot good"></span>The Good ✦</h3>
+        <p>Capitalization &amp; savoring — celebrate what neighbours are doing well. The Good stream never escalates to the city; it stays a positive, savouring space.</p>
+      </div>
+      <div class="card stream care">
+        <h3><span class="dot care"></span>Needs Care △</h3>
+        <p>Critical awareness — notice what needs attention, then act. Care items move through a visible loop: report → handling → verified fix → resolution story.</p>
+      </div>
+    </div>
+
+    <div class="ladder" style="margin-top:14px">
+      <div class="rung self"><div class="n">1</div><div><b>Tend it yourself</b><span>Small enough to fix solo — share it so others can savour or join in.</span></div></div>
+      <div class="rung rally"><div class="n">2</div><div><b>Rally neighbours</b><span>Something a few people nearby can take on together.</span></div></div>
+      <div class="rung city"><div class="n">3</div><div><b>Send to the city</b><span>Drafts a report for the responsible agency — send it, or rally first.</span></div></div>
+    </div>
+  </section>
+
+  <!-- 01 THEORY -->
+  <section>
+    <h2><span class="num">01</span>Theory</h2>
+    <p class="sub">A psychological-empowerment intervention disguised as a neighbourhood app — each interface element maps to a named idea.</p>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Psychological empowerment</h3>
+        <p>The empowerment tradition splits agency into intrapersonal (self-efficacy), interactional (understanding your community), and behavioural (taking action) components. Our Block gives each a surface: a personal impact view, a location-scoped feed, and one-tap capture.</p>
+      </div>
+      <div class="card">
+        <h3>Learned hopefulness</h3>
+        <p>The inverse of learned helplessness: agency grows when action reliably produces an effect. The action ladder guarantees every observation keeps a path forward, so no issue becomes a dead end.</p>
+      </div>
+      <div class="card">
+        <h3>Capitalization &amp; savoring</h3>
+        <p>Positive-psychology work on savouring the good builds social capital. The Good stream is a dedicated, non-escalating space to notice and celebrate — it deliberately cannot be sent to the city.</p>
+      </div>
+      <div class="card">
+        <h3>Collective efficacy &amp; subsidiarity</h3>
+        <p>Neighbourhoods act when they believe shared action works, and problems are best handled at the lowest capable level. "Our block this month" surfaces the collective; the router always tries the smallest rung first.</p>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>UI element</th><th>Mechanism it enacts</th></tr>
+      <tr><td>One-tap capture</td><td class="mech">Behavioural component — lowers the friction to act</td></tr>
+      <tr><td>Photo + short video + auto-GPS</td><td class="mech">Evidence-rich, situated awareness</td></tr>
+      <tr><td>Two streams: Good ✦ / Needs Care △</td><td class="mech">Capitalization (savoring) vs. critical awareness</td></tr>
+      <tr><td>Location-sensitive feed (radius picker)</td><td class="mech">Situated efficacy</td></tr>
+      <tr><td>AI action-ladder suggestion</td><td class="mech">Learned hopefulness — every issue keeps a path to act</td></tr>
+      <tr><td>Points, levels &amp; "Our block this month"</td><td class="mech">Intrapersonal self-efficacy + collective efficacy</td></tr>
+    </table>
+  </section>
+
+  <!-- 02 TECHNOLOGY -->
+  <section>
+    <h2><span class="num">02</span>Technology</h2>
+    <p class="sub">Lightweight, privacy-conscious, cloud-native — three invariants hold the design together.</p>
+    <div class="stack">
+      <span class="s">Node.js + Express <small>· ESM, no build</small></span>
+      <span class="s">Vanilla-JS SPA <small>· no framework</small></span>
+      <span class="s">Google Cloud Storage <small>· sole persistence</small></span>
+      <span class="s">Single LLM gateway <small>· 6 vendors</small></span>
+      <span class="s">JWT cookie auth <small>· OAuth + SMTP gateway</small></span>
+      <span class="s">Hybrid maps <small>· Google · 高德 · Leaflet</small></span>
+      <span class="s">Hash-based i18n <small>· 17 languages</small></span>
+      <span class="s">xAPI analytics <small>· LRS</small></span>
+      <span class="s">Cloud Run <small>· single container</small></span>
+    </div>
+    <div class="grid g3" style="margin-top:14px">
+      <div class="card">
+        <h3>🗄️ GCS is the only store</h3>
+        <p>No SQL, no local disk. The data model <em>is</em> the object-key layout; each post doc is self-contained, so listing the feed is one prefix scan. Concurrent writes use compare-and-set via GCS generation preconditions.</p>
+      </div>
+      <div class="card">
+        <h3>🚪 One LLM gateway</h3>
+        <p>Every model call flows through a single chokepoint that owns vendor choice, request shape, language enforcement and token accounting. Adding a vendor is one config entry — features never call a provider directly.</p>
+      </div>
+      <div class="card">
+        <h3>🌗 Graceful degradation</h3>
+        <p>With zero AI configured, routing falls back to a transparent keyword heuristic and composition to templates — the app is fully functional with no keys, and never depends on any single provider.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <p>Six runtime dependencies, zero build steps, and roles derived server-side (never client-asserted). Media never touches local disk — uploads land in GCS and stream back through the media route.</p>
+    </div>
+  </section>
+
+  <!-- 03 APPLICATIONS -->
+  <section>
+    <h2><span class="num">03</span>Applications</h2>
+    <p class="sub">Where it fits and who it serves.</p>
+    <div class="grid g2">
+      <div class="card">
+        <h3>🏘️ Neighbourhoods &amp; resident associations</h3>
+        <p>The core case: residents of a block notice, savour and repair their shared space, with a light steward tier (an email allowlist) for community moderation.</p>
+      </div>
+      <div class="card">
+        <h3>🏛️ Municipal &amp; 311-style intake</h3>
+        <p>The send-to-city rung drafts a structured, geo-located, evidence-rich report for the responsible agency — but only after the lower rungs have been offered.</p>
+      </div>
+      <div class="card">
+        <h3>🎓 Civic education &amp; learning analytics</h3>
+        <p>xAPI statements to a learning-record store make civic participation legible as learning, so classrooms and programs can run place-based projects on it.</p>
+      </div>
+      <div class="card">
+        <h3>🌏 Multilingual &amp; cross-border communities</h3>
+        <p>Hash-based i18n back-fills 17 languages (including four right-to-left) automatically through the gateway, and maps switch between Google, 高德 and self-hosted Leaflet by region.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 IMPACTS -->
+  <section>
+    <h2><span class="num">04</span>Impacts</h2>
+    <p class="sub">What changes for each audience — framed as mechanisms the design produces, not measured outcomes.</p>
+    <div class="grid g2">
+      <div class="card">
+        <h3>For residents</h3>
+        <p>Because every observation keeps a viable next step, the loop is built to convert noticing into agency instead of frustration — and a savouring stream to make the good visible, not just the broken.</p>
+      </div>
+      <div class="card">
+        <h3>For neighbourhoods</h3>
+        <p>A location-scoped feed plus "our block this month" is designed to surface collective efficacy — the shared sense that acting together works — rather than isolated individual complaints.</p>
+      </div>
+      <div class="card">
+        <h3>For cities</h3>
+        <p>Escalation only happens when lower rungs can't resolve an issue, so what reaches the agency is structured, situated and pre-triaged — by design, less noise per report.</p>
+      </div>
+      <div class="card">
+        <h3>For educators &amp; stewards</h3>
+        <p>xAPI instrumentation turns real civic participation into analyzable learning signals, so a steward or teacher can see engagement as it happens instead of after the fact.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>优城美市 · Our Block — a place-based civic-wellbeing app. Numbers on this page are grounded in the codebase.</span>
+    <span class="cta">
+      <a class="btn ghost" href="/teasers/about.html">Watch the teaser</a>
+      <a class="btn" href="/">Open the app →</a>
+    </span>
+  </footer>
+
+</div>
+</body>
+</html>

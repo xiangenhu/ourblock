@@ -1,0 +1,28 @@
+{
+  "kits": [
+    {
+      "name": "i18n",
+      "skill": "team-i18n",
+      "dir": "i18n-kit",
+      "description": "Hash-based i18n: client runtime + server routes + on-demand translation + Suggestion Mode"
+    },
+    {
+      "name": "showcase",
+      "skill": "showcase",
+      "dir": "showcase-kit",
+      "description": "Cinematic 120s teaser engine + factsheet scaffold (self-contained HTML)"
+    },
+    {
+      "name": "help",
+      "skill": "team-help",
+      "dir": "help-kit",
+      "description": "App-wide contextual \"?\" help assistant (client chip/card + Express routes)"
+    },
+    {
+      "name": "bugfix",
+      "skill": "team-bugfix",
+      "dir": "bugfix-kit",
+      "description": "Self-contained bug tracking: client+server capture to BUG_LRS + CLI triage"
+    }
+  ]
+}

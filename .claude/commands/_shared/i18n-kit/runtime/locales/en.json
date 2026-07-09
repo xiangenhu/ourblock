@@ -1,0 +1,11 @@
+{
+  "_meta": {
+    "language": "en",
+    "name": "English",
+    "direction": "ltr",
+    "version": "1.0.0",
+    "basedOn": "en",
+    "note": "Source locale. Hashes are SHA-256(first-16) of the English string; translations for other languages are keyed by the same hash. Served from GCS in production; this file is the on-disk template/fallback."
+  },
+  "translations": {}
+}

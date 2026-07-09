@@ -1,0 +1,45 @@
+{
+  "name": "help",
+  "skill": "team-help",
+  "description": "Contextual \"?\" help assistant: one-file client chip/card + public ask route + GCS cache + admin analytics",
+  "requires": ["GCS_BUCKET_NAME (cache + analytics persistence)", "an LLM provider (for /help/ask, routed via llmGateway)"],
+  "copy": [
+    {
+      "id": "public",
+      "from": "runtime/public",
+      "to": "client/public",
+      "files": ["contextual-help.js"]
+    },
+    {
+      "id": "server",
+      "from": "runtime/server",
+      "to": "server/help",
+      "files": ["help.js", "helpStore.js"]
+    }
+  ],
+  "wiring": [
+    "1. Client — drop contextual-help.js into your served public dir, then add one tag per page (idempotent):",
+    "     <script src=\"/contextual-help.js?v=1\"></script>",
+    "   Edit the CFG block at the top: appSlug, api.config/ask, langCookie, feedbackUrl (null to hide).",
+    "   Match CFG.api.* to where you mount the routes (defaults are /api/*; this app mounts under /server).",
+    "2. Server — fix the require paths in the copied files (installer copies verbatim):",
+    "     help.js:      '../services/helpStore'  ->  './helpStore'   (now a sibling in server/help/)",
+    "     helpStore.js: './storage'              ->  '../services/storage'",
+    "   Leave '../services/llmGateway', '../middleware/auth', '../utils/language' as-is IF those live in",
+    "   server/services, server/middleware, server/utils; otherwise repoint to your equivalents.",
+    "3. Server — mount the router once (server.js), AFTER cookie-parser and your rate limiter:",
+    "     const helpRouter = require('./help/help');",
+    "     app.use('/server', llmLimiter, helpRouter);   // llmLimiter guards the public /help/ask",
+    "   Routes: GET /config/help-hover (public), POST /help/ask (public), GET /admin/help-analytics (Admin).",
+    "4. Swap slots the copied server code expects (see README 'Integration contract'):",
+    "     storage      -> GCS service exposing getBucket(), isConfigured(), downloadFile(name)",
+    "     llmGateway   -> { llmGateway } with .chat(messages, opts) (the single LLM chokepoint)",
+    "     auth         -> { optionalAuth (fn), requireAdmin (middleware array) }",
+    "     language     -> { LANGUAGE_NAMES } code->name map",
+    "5. Optional — bundle a grounding doc at server/data/help-grounding.md (or GCS HELP_GROUNDING_DOC)",
+    "   to ground \"why is this here?\" answers; without it the bot answers from the DOM snippet only.",
+    "",
+    "/help/ask + /config/help-hover are PUBLIC by design (chip lives on pre-sign-in pages) but rate-limited.",
+    "/admin/help-analytics is Admin-only. Cache + analytics no-op (answer, don't persist) without GCS."
+  ]
+}
