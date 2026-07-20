@@ -424,6 +424,15 @@ a{color:inherit}
 .geo-check.bad{background:#FBE7DF;border:1px solid #E6C3B4;color:#9A4423}
 .detail-map{margin-top:14px}
 .detail-map .gmap{height:220px}
+/* Clickable address → on-demand map popup (no inline map on the detail page) */
+.addr-btn{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;vertical-align:baseline}
+.addr-btn:hover{color:var(--green-2)}
+.addr-btn .addr-map-hint{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--green);background:var(--green-tint);border-radius:6px;padding:1px 6px}
+.addr-btn:hover .addr-map-hint{filter:brightness(.97)}
+.map-popup{max-width:560px;padding:0;overflow:hidden}
+.map-popup-head{padding:13px 46px 11px 15px;font-weight:700;font-size:13px;border-bottom:1px solid var(--line)}
+.map-popup .detail-map{margin:0;border-radius:0;border:0;box-shadow:none}
+.map-popup .detail-map .gmap{height:340px}
 
 @media(max-width:720px){
   .land-cols{grid-template-columns:1fr}

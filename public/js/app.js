@@ -763,16 +763,45 @@ function renderAnonShare() {
   };
 }
 
-/** A small map centred on a single post's location (used in post detail views). */
-function detailMap(p) {
-  if (p.lat == null || p.lng == null) return null;
-  const card = h(`<div class="map-card detail-map"><div class="gmap"></div></div>`);
-  const el = card.querySelector('.gmap');
+/** The 📍 address label shown on post detail. When the post carries coordinates it
+ * becomes a button that opens the map on demand — the detail page ships an address
+ * (text) and never an inline map, so the exact spot is only revealed on a tap. */
+function addrLabel(p) {
+  const place = esc(p.placeName || t('Nearby'));
+  return (p.lat != null && p.lng != null)
+    ? `<button class="addr-btn" type="button" data-map>📍 ${place} <span class="addr-map-hint">${esc(t('map'))}</span></button>`
+    : `📍 ${place}`;
+}
+
+/** Wire the addrLabel button inside a rendered element to open the map popup. */
+function wireAddr(el, p) {
+  el.querySelector('[data-map]')?.addEventListener('click', () => openMapPopup(p));
+}
+
+/** Open a single post's location on a map in a dismissible popup, loading the map
+ * engine on demand. Kept ungated (same reveal as before) — the map moved off the
+ * page, not behind proximity. */
+function openMapPopup(p) {
+  if (p.lat == null || p.lng == null) return;
+  const overlay = h(`<div class="modal-overlay"></div>`);
+  const cardEl = h(`<div class="modal-card map-popup">
+      <div class="map-popup-head">📍 ${esc(p.placeName || t('Location'))}</div>
+      <div class="map-card detail-map"><div class="gmap"></div></div>
+    </div>`);
+  const close = h(`<button class="modal-close" type="button" aria-label="${esc(t('Close'))}">×</button>`);
+  const dismiss = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') dismiss(); };
+  close.onclick = dismiss;
+  overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+  document.addEventListener('keydown', onKey);
+  cardEl.appendChild(close);
+  overlay.appendChild(cardEl);
+  document.body.appendChild(overlay);
+  const el = cardEl.querySelector('.gmap');
   getEngine().then(({ create }) => {
     const M = create(el, [p.lat, p.lng], 16);
     M.addPin(p.lat, p.lng, p.stream === 'good');
   }).catch(() => mapFallback(el));
-  return card;
 }
 
 /* ----------------------------------------------- anonymous read-only post detail */
@@ -801,14 +830,14 @@ function anonPostCard(p, { sample, comments } = {}) {
   box.appendChild(p.mediaUrl
     ? h(`<div class="detail-media"><img src="${esc(p.mediaUrl)}" alt=""></div>`)
     : h(`<div class="detail-media ${g ? 'g' : 'c'}"></div>`));
-  const dm = detailMap(p);
-  if (dm) box.appendChild(dm);
-  box.appendChild(h(`<div class="card" style="margin-top:14px">
+  const metaCard = h(`<div class="card" style="margin-top:14px">
       <div><span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>${sample ? ` <span class="sample-tag">${esc(t('sample'))}</span>` : ''}</div>
       <h2 style="font-family:var(--display);font-size:22px;margin:8px 0 6px">${esc(p.title)}</h2>
-      <div class="pmeta">📍 ${esc(p.placeName || t('Nearby'))} · ${esc(p.author?.name || t('A neighbour'))} · ${timeAgo(p.createdAt)}</div>
+      <div class="pmeta">${addrLabel(p)} · ${esc(p.author?.name || t('A neighbour'))} · ${timeAgo(p.createdAt)}</div>
       ${p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : ''}
-    </div>`));
+    </div>`);
+  wireAddr(metaCard, p);
+  box.appendChild(metaCard);
 
   const cbox = h(`<div class="card"><h4 style="font-family:var(--display);margin-bottom:8px">${comments ? tf('Neighbour replies ({n})', { n: comments.length }) : esc(t('Neighbour replies'))}</h4></div>`);
   if (sample) {
@@ -1961,9 +1990,6 @@ function postDetailView() {
       media.appendChild(h(`<span class="badge" style="position:absolute;bottom:10px;left:10px">${p.mediaType === 'video' ? '▶ Video' : '◎ Photo'}</span>`));
       slot.appendChild(media);
     }
-    const dm = detailMap(p);
-    if (dm) slot.appendChild(dm);
-
     const card = h(`<div class="card" style="margin-top:14px">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <span class="badge" style="background:${g ? 'var(--good)' : 'var(--care)'};color:${g ? '#3a2a10' : '#fff'}">${g ? '✦ ' + esc(t('The Good')) : '△ ' + esc(t('Needs Care'))}</span>
@@ -1972,12 +1998,13 @@ function postDetailView() {
           ${(p.groups || []).map((id) => { const gg = groupOf(id); return gg ? `<span class="group-tag">${gg.e} ${esc(t(gg.label))}</span>` : ''; }).join('')}
         </div>
         <h2 style="font-family:var(--display);font-size:22px;margin-bottom:6px">${moodOf(p.mood) ? moodOf(p.mood).e + ' ' : ''}${esc(p.title)}</h2>
-        <div class="pmeta">📍 ${esc(p.placeName || t('Nearby'))}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })} · ${timeAgo(p.createdAt)}</div>
+        <div class="pmeta">${addrLabel(p)}${p.distanceM != null ? ' · ' + dist(p.distanceM) : ''} · ${tf('by {name}', { name: esc(p.author?.name || t('Neighbour')) })} · ${timeAgo(p.createdAt)}</div>
         ${far
           ? `<div class="modal-locked" style="margin-top:10px">🔒<div><b>${p.distanceM != null ? esc(tf('{d} away', { d: dist(p.distanceM) })) : esc(t('You’re not nearby'))}</b>
                <p>${tf('This message and its photo unlock when you’re within {radius} of where it was posted.', { radius: REVEAL_LABEL })}</p></div></div>`
           : (p.body ? `<p class="pdesc" style="margin-top:8px">${esc(p.body)}</p>` : '')}
       </div>`);
+    wireAddr(card, p);
     card.appendChild(reactionRow(p, card));
     const isOwner = p.author?.id === state.user.id;
     if (isOwner || state.user.isAdmin) {
