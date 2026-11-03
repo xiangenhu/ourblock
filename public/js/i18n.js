@@ -14,7 +14,7 @@ export const UI_LANGS_META = [
   { code: 'en', label: 'English' }, { code: 'zh', label: '中文' }, { code: 'es', label: 'Español' },
   { code: 'fr', label: 'Français' }, { code: 'de', label: 'Deutsch' }, { code: 'it', label: 'Italiano' },
   { code: 'pt', label: 'Português' }, { code: 'ja', label: '日本語' }, { code: 'ko', label: '한국어' },
-  { code: 'th', label: 'ไทย' }, { code: 'vi', label: 'Tiếng Việt' }, { code: 'ru', label: 'Русский' },
+  { code: 'th', label: 'ไทย' }, { code: 'vi', label: 'Tiếng Việt (Vietnamese)' }, { code: 'ru', label: 'Русский' },
   { code: 'hi', label: 'हिन्दी' }, { code: 'ar', label: 'العربية' }, { code: 'he', label: 'עברית' },
   { code: 'fa', label: 'فارسی' }, { code: 'ur', label: 'اردو' },
 ];
