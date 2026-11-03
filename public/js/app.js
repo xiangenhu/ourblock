@@ -528,7 +528,7 @@ const STYLE_LANGS = [
   { code: 'zh', label: '中文' }, { code: 'en', label: 'English' }, { code: 'es', label: 'Español' },
   { code: 'fr', label: 'Français' }, { code: 'de', label: 'Deutsch' }, { code: 'it', label: 'Italiano' },
   { code: 'pt', label: 'Português' }, { code: 'ja', label: '日本語' }, { code: 'ko', label: '한국어' },
-  { code: 'vi', label: 'Tiếng Việt' }, { code: 'ru', label: 'Русский' }, { code: 'ar', label: 'العربية' }, { code: 'hi', label: 'हिन्दी' },
+  { code: 'vi', label: 'Tiếng Việt (Vietnamese)' }, { code: 'ru', label: 'Русский' }, { code: 'ar', label: 'العربية' }, { code: 'hi', label: 'हिन्दी' },
 ];
 // Rough country → language for a location-based default (the geo-IP hint from /api/auth/config).
 const COUNTRY_LANG = {
